@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>凸透鏡成像模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 凸透鏡成像模擬儀 · 108課綱 Kc-Ⅳ 透鏡成像 ===== */
+const DI_SCREEN=30, TOL=0.2;
+
+const ui=buildInstrument({
+  title:'凸透鏡成像模擬儀',
+  tag:'Kc-Ⅳ 透鏡成像',
+  brief:'調整物距與焦距，然後提交驗證',
+  readouts:[
+    {id:'ro_do', label:'物距 dₒ'},
+    {id:'ro_f',  label:'焦距 f'},
+    {id:'ro_di', label:'像距 dᵢ'},
+    {id:'ro_tgt',label:'螢幕位置'},
+    {id:'ro_mag',label:'放大率 m'},
+    {id:'ro_state',label:'成像狀態'},
+  ],
+  views:[
+    {id:'rays',  label:'光線圖'},
+    {id:'screen',label:'螢幕影像'},
+    {id:'curve', label:'成像關係圖'},
+  ],
+  deckHTML:
+    knob('dobj','物距',5,60,1,12,' cm') +
+    knob('focal','焦距',5,25,1,10,' cm') +
+    toggle('tg_rays','顯示主要光線',true) +
+    toggle('tg_focus','標示焦點',true)
+});
+const cv=ui.cv,ctx=cv.getContext('2d');
+const hintLog=makeHintLog(ui);
+const cap=makeCap(ui,()=>{ui.status.textContent='此機台強化已達上限，仍可自由練習';ui.status.className='hint';});
+const views=makeViews(ui,()=>draw());
+const showRays=wireToggle('tg_rays',()=>draw());
+const showFocus=wireToggle('tg_focus',()=>draw());
+
+let W,H,solved=false,applied=false,tested=false,failCount=0;
+function dobj(){return +document.getElementById('dobj').value;}
+function focal(){return +document.getElementById('focal').value;}
+function dimg(){const inv=1/focal()-1/dobj();return inv>0?1/inv:null;}
+function mode(){const di=dimg();
+  if(di===null)return'virtual';
+  if(Math.abs(di-DI_SCREEN)<TOL)return'ok';
+  return di<DI_SCREEN?'near':'far';}
+
+wireKnobs((id,v)=>{setKnobRD(id,v+' cm');reset();});
+function reset(){solved=false;applied=false;tested=false;
+  if(!cap.full)ui.apply.disabled=true;refresh();}
+function refresh(){updateRO();draw();}
+function updateRO(){
+  const di=dimg(),m=mode();
+  setRO('ro_do',`${dobj()} cm`,'amber');
+  setRO('ro_f',`${focal()} cm`,'violet');
+  setRO('ro_di', di===null?'無實像 (dₒ < f)':`${di.toFixed(1)} cm`, m==='ok'?'green':'red');
+  setRO('ro_tgt',`${DI_SCREEN} cm`,'green');
+  setRO('ro_mag', di===null?'—':`${(di/dobj()).toFixed(2)} ×（倒立）`);
+  const lbl={ok:'清晰成像於螢幕',near:'像在螢幕前',far:'像在螢幕後',virtual:'無實像可投影'}[m];
+  setRO('ro_state', tested?lbl+'（已驗證）':lbl+'（預測）', m==='ok'?'green':'red');
+}
+function progressiveHint(){
+  const n=failCount,m=mode(),di=dimg();
+  if(n<2)return;
+  let lv,msg;
+  if(m==='virtual'){
+    if(n===2){lv=1;msg=`螢幕上完全沒有像。凸透鏡並非任何情況都能在螢幕上成像——`
+      +`當物體離透鏡「太近」時，光線出來後不會再會聚，自然無法投影在螢幕上。`
+      +`比較看看：目前的物距和焦距，誰比較大？`;}
+    else if(n===3){lv=2;msg=`凸透鏡要形成能投影到螢幕的「實像」，物體必須放在焦點<b>之外</b>。`
+      +`目前物距 ${dobj()} cm、焦距 ${focal()} cm——物體落在焦點以內，`
+      +`這時只會看到放大的正立虛像（像放大鏡），無法投影。請調整到物距大於焦距。`;}
+    else{lv=3;msg=`成實像的條件是 dₒ > f。當 dₒ < f 時，1/f − 1/dₒ 為負，代表沒有實像。`
+      +`請先讓物距大於焦距，再進一步調整讓像距等於 ${DI_SCREEN} cm。`;}
+  } else {
+    const obs=m==='near'?`像成在螢幕「前方」（像距 ${di.toFixed(1)} cm < ${DI_SCREEN} cm）`
+                        :`像成在螢幕「後方」（像距 ${di.toFixed(1)} cm > ${DI_SCREEN} cm）`;
+    if(n===2){lv=1;msg=`${obs}，所以螢幕上看到的是模糊光斑。`
+      +`想一想：把物體移遠或移近，像會往哪個方向跑？換焦距更長的透鏡呢？`
+      +`<br><span style="opacity:.8">可切到「成像關係圖」檢視，看 dᵢ 隨 dₒ 的變化。</span>`;}
+    else if(n===3){lv=2;msg=`物距越大，像距越小（像往透鏡靠近）；焦距越大，像距越大。`
+      +`目前像距${m==='near'?'太小':'太大'}，你可以${m==='near'?'「減小物距」或「增大焦距」':'「增大物距」或「減小焦距」'}。`
+      +`試著只動一個旋鈕，觀察像距的變化方向。`;}
+    else{lv=3;msg=`透鏡成像公式為 1/f = 1/dₒ + 1/dᵢ。目標是讓像距 dᵢ = ${DI_SCREEN} cm。`
+      +`目前 f = ${focal()}、dₒ = ${dobj()}，代入算出 dᵢ = ${di.toFixed(1)}。`
+      +`請把 f 與 dₒ 調成滿足 1/f − 1/dₒ = 1/${DI_SCREEN} 的組合。`;}
+  }
+  hintLog.add(lv,n,msg);
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;draw();}
+window.addEventListener('resize',resize);
+function draw(){if(!W)return;ctx.clearRect(0,0,W,H);
+  const v=views.current;
+  if(v==='screen'){drawScreen();return;} if(v==='curve'){drawCurve();return;} drawRays();}
+
+function drawRays(){
+  const axisY=H*0.54,lensX=W*0.42;
+  const SC=Math.min(4.4,(W*0.42)/62);
+  ctx.strokeStyle='rgba(148,163,184,0.4)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(16,axisY);ctx.lineTo(W-16,axisY);ctx.stroke();ctx.setLineDash([]);
+  // 透鏡
+  ctx.strokeStyle='#7fdcff';ctx.lineWidth=3;
+  ctx.beginPath();ctx.ellipse(lensX,axisY,11,56,0,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='rgba(126,220,255,0.10)';ctx.fill();
+  ctx.fillStyle='#7fdcff';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('凸透鏡',lensX,axisY-64);
+  // 焦點
+  if(showFocus()){
+    [-1,1].forEach(s=>{const fx=lensX+s*focal()*SC;
+      ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(fx,axisY,4,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#fcd34d';ctx.font='10px sans-serif';ctx.fillText('F',fx,axisY+15);});
+    // 2F
+    [-1,1].forEach(s=>{const fx=lensX+s*2*focal()*SC;
+      if(fx>10&&fx<W-10){ctx.strokeStyle='rgba(251,191,36,0.4)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.arc(fx,axisY,3,0,Math.PI*2);ctx.stroke();
+        ctx.fillStyle='rgba(252,211,77,0.6)';ctx.fillText('2F',fx,axisY+15);}});
+  }
+  // 物體
+  const doo=dobj(),ox=lensX-doo*SC,oh=42;
+  ctx.strokeStyle='#f59e0b';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(ox,axisY);ctx.lineTo(ox,axisY-oh);ctx.stroke();
+  ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(ox,axisY-oh-5,5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fde68a';ctx.font='10px sans-serif';ctx.fillText(`物 ${doo}cm`,ox,axisY+16);
+  // 螢幕
+  const scx=lensX+DI_SCREEN*SC;
+  ctx.fillStyle='#334155';ctx.fillRect(scx-3,axisY-68,6,136);
+  ctx.fillStyle='#94a3b8';ctx.fillText(`螢幕 ${DI_SCREEN}cm`,scx,axisY+84);
+  const di=dimg(),m=mode();
+  if(di!==null){
+    const ix=lensX+di*SC,mag=di/doo,ih=oh*mag;
+    if(showRays()){
+      ctx.strokeStyle='rgba(251,191,36,0.5)';ctx.lineWidth=1.5;
+      // 平行入射 → 折射過焦點
+      ctx.beginPath();ctx.moveTo(ox,axisY-oh);ctx.lineTo(lensX,axisY-oh);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(lensX,axisY-oh);ctx.lineTo(Math.min(ix,W-8),axisY+ih*Math.min(1,(W-8-lensX)/(ix-lensX)));ctx.stroke();
+      // 過光心直行
+      ctx.strokeStyle='rgba(126,220,255,0.5)';
+      ctx.beginPath();ctx.moveTo(ox,axisY-oh);ctx.lineTo(Math.min(ix,W-8),axisY+ih*Math.min(1,(W-8-ox)/(ix-ox)));ctx.stroke();
+    }
+    if(ix<W-8){
+      const on=Math.abs(di-DI_SCREEN)<TOL;
+      ctx.strokeStyle=on?'#4ade80':'rgba(248,113,113,0.85)';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(ix,axisY);ctx.lineTo(ix,axisY+ih);ctx.stroke();
+      ctx.fillStyle=on?'#4ade80':'#fca5a5';
+      ctx.beginPath();ctx.arc(ix,axisY+ih+5,5,0,Math.PI*2);ctx.fill();
+      ctx.font='10px sans-serif';ctx.fillText(`像 ${di.toFixed(1)}cm`,ix,axisY+ih+22);
+    }
+  } else {
+    ctx.fillStyle='rgba(248,113,113,0.85)';ctx.font='13px sans-serif';
+    ctx.fillText('物體在焦點內（dₒ < f）→ 成正立放大虛像，無法投影於螢幕',W/2,H*0.9);
+  }
+  ctx.textAlign='left';
+}
+function drawScreen(){
+  // 模擬螢幕上看到的影像/光斑
+  const di=dimg(),m=mode();
+  const cx=W/2,cy=H*0.48;
+  ctx.fillStyle='#1a1f2e';ctx.fillRect(cx-W*0.28,cy-H*0.3,W*0.56,H*0.6);
+  ctx.strokeStyle='#475569';ctx.lineWidth=2;ctx.strokeRect(cx-W*0.28,cy-H*0.3,W*0.56,H*0.6);
+  ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`螢幕（距透鏡 ${DI_SCREEN} cm）`,cx,cy-H*0.32);
+  if(di===null){
+    ctx.fillStyle='#334155';ctx.font='14px sans-serif';
+    ctx.fillText('螢幕全暗 — 沒有實像投影',cx,cy);
+    ctx.fillStyle='#8ba7c4';ctx.font='11px sans-serif';
+    ctx.fillText('物體在焦點內時，出射光發散，無法在螢幕會聚成像',cx,cy+24);
+  } else {
+    const blur=Math.abs(di-DI_SCREEN);
+    const mag=di/dobj(), ih=Math.min(H*0.44, 42*mag*1.6);
+    ctx.save();
+    if(blur>TOL) ctx.filter=`blur(${Math.min(18,blur*1.1)}px)`;
+    // 倒立燭焰
+    ctx.strokeStyle='#f59e0b';ctx.lineWidth=Math.max(3,6/(1+blur*0.1));
+    ctx.beginPath();ctx.moveTo(cx,cy-ih*0.4);ctx.lineTo(cx,cy+ih*0.4);ctx.stroke();
+    ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(cx,cy+ih*0.4+7,8,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    ctx.filter='none';
+    ctx.fillStyle=blur<=TOL?'#4ade80':'#fca5a5';ctx.font='13px sans-serif';
+    ctx.fillText(blur<=TOL?'✓ 清晰倒立實像':`模糊（像距偏差 ${blur.toFixed(1)} cm）`,cx,cy+H*0.34);
+    ctx.fillStyle='#8ba7c4';ctx.font='11px sans-serif';
+    ctx.fillText(`放大率 ${(mag).toFixed(2)}× ・ 倒立`,cx,cy+H*0.34+18);
+  }
+  ctx.textAlign='left';
+}
+function drawCurve(){
+  const ox=W*0.13,oy=H*0.85,gw=W*0.74,gh=H*0.68;
+  const maxDo=60,maxDi=80;
+  ctx.strokeStyle='#475569';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(ox,oy-gh);ctx.lineTo(ox,oy);ctx.lineTo(ox+gw,oy);ctx.stroke();
+  ctx.fillStyle='#94a3b8';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('物距 dₒ (cm)',ox+gw/2,oy+28);
+  ctx.save();ctx.translate(ox-32,oy-gh/2);ctx.rotate(-Math.PI/2);ctx.fillText('像距 dᵢ (cm)',0,0);ctx.restore();
+  for(let v=0;v<=60;v+=10){const px=ox+gw*(v/maxDo);
+    ctx.strokeStyle='#1e293b';ctx.beginPath();ctx.moveTo(px,oy);ctx.lineTo(px,oy-gh);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.fillText(v,px,oy+15);}
+  for(let v=0;v<=80;v+=20){const py=oy-gh*(v/maxDi);
+    ctx.strokeStyle='#1e293b';ctx.beginPath();ctx.moveTo(ox,py);ctx.lineTo(ox+gw,py);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.textAlign='right';ctx.fillText(v,ox-6,py+4);ctx.textAlign='center';}
+  // 螢幕位置線
+  const sy=oy-gh*(DI_SCREEN/maxDi);
+  ctx.strokeStyle='rgba(74,222,128,0.55)';ctx.setLineDash([6,5]);ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(ox,sy);ctx.lineTo(ox+gw,sy);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#4ade80';ctx.textAlign='left';ctx.fillText(`螢幕 dᵢ = ${DI_SCREEN} cm`,ox+6,sy-6);
+  // 焦距垂直線（漸近線）
+  const fx=ox+gw*(focal()/maxDo);
+  ctx.strokeStyle='rgba(251,191,36,0.5)';ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(fx,oy);ctx.lineTo(fx,oy-gh);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#fbbf24';ctx.textAlign='center';ctx.font='10px sans-serif';
+  ctx.fillText(`dₒ = f = ${focal()}`,fx,oy-gh-4);
+  // 曲線 di = 1/(1/f - 1/do)，僅 do>f
+  ctx.strokeStyle='#7fdcff';ctx.lineWidth=2.5;ctx.beginPath();
+  let first=true;
+  for(let d=focal()+0.4;d<=maxDo;d+=0.3){
+    const inv=1/focal()-1/d; if(inv<=0)continue;
+    const di=1/inv; if(di>maxDi)continue;
+    const px=ox+gw*(d/maxDo),py=oy-gh*(di/maxDi);
+    if(first){ctx.moveTo(px,py);first=false;}else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  // 目前工作點
+  const di=dimg();
+  if(di!==null&&di<=maxDi){
+    const px=ox+gw*(dobj()/maxDo),py=oy-gh*(di/maxDi);
+    ctx.fillStyle=mode()==='ok'?'#4ade80':'#f87171';
+    ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
+    ctx.fillStyle='#e2e8f0';ctx.font='11px sans-serif';
+    ctx.fillText(`(${dobj()}, ${di.toFixed(1)})`,px,py-12);
+  }
+  ctx.fillStyle='#8ba7c4';ctx.font='11px sans-serif';
+  ctx.fillText('物距趨近 f 時像距趨近無窮大；dₒ < f 則無實像',ox+gw/2,oy-gh-20);
+  ctx.textAlign='left';
+}
+ui.submit.onclick=()=>{
+  if(applied)return;
+  tested=true;updateRO();draw();
+  const m=mode();
+  if(m==='ok'){
+    solved=true;
+    ui.status.textContent='✓ 清晰成像！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success(`f=${focal()}、dₒ=${dobj()} → dᵢ=${dimg().toFixed(1)} cm，實像恰好落在螢幕上。`);
+    if(!cap.full)ui.apply.disabled=false;
+  } else {
+    failCount++;solved=false;ui.apply.disabled=true;
+    const lbl={near:'像成在螢幕前',far:'像成在螢幕後',virtual:'無實像（物在焦點內）'}[m];
+    ui.status.textContent=`✗ 第 ${failCount} 次失敗 — ${lbl}`;
+    ui.status.className='bad';progressiveHint();
+  }
+};
+ui.reset.onclick=()=>{failCount=0;hintLog.clear();reset();
+  ui.status.textContent='調整物距與焦距，然後提交驗證';ui.status.className='hint';};
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true;ui.apply.disabled=true;cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)';ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'jump',amount:2,machine:'lens'},'*');
+};
+resize();refresh();
+</script>
+</body>
+</html>

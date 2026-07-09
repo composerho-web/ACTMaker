@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>九房間布置 · 未來實驗室 Tile Set</title>
+<style>
+  body{background:#0e1320;color:#dfe6f2;font-family:system-ui,sans-serif;margin:0;
+       display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
+  #wrap{position:relative;border-radius:10px;overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.6)}
+  canvas{display:block;background:#0a0e18}
+  .bar{margin-top:12px;background:#182135;padding:.5rem 1rem;border-radius:8px;font-size:14px}
+  .k{background:#dfe6f2;color:#111;border-radius:4px;padding:1px 7px;font-weight:700;margin:0 2px;border-bottom:2px solid #9aa7bd}
+  h1{font-size:18px;color:#8ec5ff;margin:6px}
+</style>
+</head>
+<body>
+<h1>九房間布置 · 未來實驗室</h1>
+<div id="wrap"><canvas id="cv" width="900" height="500" tabindex="0"></canvas></div>
+<div class="bar"><span class="k">方向鍵</span> 移動 · <span class="k">Shift</span> 奔跑 · 走到閃動的門切換房間 · 大型物件會擋路</div>
+<script>
+const PROPS = {"desk_console":{"x":0,"y":0,"w":302,"h":185,"collide":true},"desk_pipe":{"x":306,"y":0,"w":291,"h":185,"collide":true},"desk_terminal":{"x":601,"y":0,"w":280,"h":185,"collide":true},"desk_dualmon":{"x":885,"y":0,"w":396,"h":185,"collide":true},"monitor":{"x":1285,"y":0,"w":146,"h":185,"collide":false},"monitor_wide":{"x":1435,"y":0,"w":186,"h":184,"collide":false},"tri_monitor":{"x":1625,"y":0,"w":358,"h":185,"collide":false},"hologram_s":{"x":0,"y":189,"w":115,"h":185,"collide":false},"hologram_m":{"x":119,"y":189,"w":152,"h":185,"collide":false},"hologram_l":{"x":275,"y":189,"w":139,"h":185,"collide":false},"L_desk":{"x":418,"y":189,"w":355,"h":280,"collide":true},"arch_desk":{"x":777,"y":189,"w":364,"h":280,"collide":true},"stool":{"x":1145,"y":189,"w":117,"h":160,"collide":true},"stool2":{"x":1266,"y":189,"w":116,"h":166,"collide":true},"chair_side":{"x":1386,"y":189,"w":193,"h":175,"collide":true},"laptop":{"x":1583,"y":189,"w":165,"h":155,"collide":false},"laptop_blue":{"x":1752,"y":189,"w":162,"h":175,"collide":false},"drive":{"x":0,"y":473,"w":136,"h":135,"collide":false},"server_tall":{"x":140,"y":473,"w":173,"h":435,"collide":true},"server_box":{"x":317,"y":473,"w":161,"h":435,"collide":true},"server_rack":{"x":482,"y":473,"w":170,"h":435,"collide":true},"server_open":{"x":656,"y":473,"w":155,"h":424,"collide":true},"server_cabinet":{"x":815,"y":473,"w":196,"h":435,"collide":true},"microscope":{"x":1015,"y":473,"w":195,"h":201,"collide":true},"centrifuge":{"x":1214,"y":473,"w":203,"h":201,"collide":true},"incubator":{"x":1421,"y":473,"w":203,"h":215,"collide":true},"tank_green":{"x":1628,"y":473,"w":176,"h":435,"collide":true},"robot_arm":{"x":1808,"y":473,"w":203,"h":230,"collide":true},"pipes_big":{"x":0,"y":912,"w":332,"h":230,"collide":true},"vial_rack":{"x":336,"y":912,"w":193,"h":230,"collide":false},"petri":{"x":533,"y":912,"w":161,"h":230,"collide":false},"flask_pair":{"x":698,"y":912,"w":169,"h":229,"collide":false},"trash":{"x":871,"y":912,"w":121,"h":230,"collide":true},"gas_tanks":{"x":996,"y":912,"w":254,"h":198,"collide":true},"flask_two":{"x":1254,"y":912,"w":161,"h":197,"collide":false},"trash_open":{"x":1419,"y":912,"w":128,"h":197,"collide":true},"door_slide":{"x":1551,"y":912,"w":287,"h":198,"collide":true},"airlock":{"x":0,"y":1146,"w":282,"h":198,"collide":true}};
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+cv.focus(); cv.addEventListener('click',()=>cv.focus());
+const VIEW_W=900, VIEW_H=500, ROOM_W=1800, FLOOR_TOP=270, FLOOR_BOT=470;
+
+// 載入道具圖與角色圖
+const propsImg=new Image(); let propsLoaded=false;
+propsImg.onload=()=>propsLoaded=true; propsImg.src='props.png';
+
+const manImg=new Image(); let manLoaded=false, manProc=new Image();
+manImg.onload=()=>{ try{
+  const tc=document.createElement('canvas'); tc.width=manImg.width; tc.height=manImg.height;
+  const t=tc.getContext('2d'); t.drawImage(manImg,0,0);
+  const id=t.getImageData(0,0,tc.width,tc.height), d=id.data;
+  for(let i=0;i<d.length;i+=4){const r=d[i],g=d[i+1],b=d[i+2];
+    const s=Math.max(r,g,b)-Math.min(r,g,b),mx=Math.max(r,g,b);
+    if(s<16&&mx>95&&mx<165)d[i+3]=0;}
+  t.putImageData(id,0,0); manProc.onload=()=>manLoaded=true; manProc.src=tc.toDataURL();
+}catch(e){manProc=manImg;manLoaded=true;} };
+manImg.onerror=()=>manLoaded=false; manImg.src='MAN.png';
+
+// MAN 精靈圖網格（沿用先前校正好的中心座標）
+const MAN_CENTERS=[141,377,613,843,1084,1328,1565,1806,2040,2279,2496,2716];
+const MAN_ROWTOPS=[78,320,564,804,1045,1298]; const MAN_ROWH=226, MAN_CW=220;
+const ANIM={ idle:{row:0,s:0,n:9,sp:9}, walk:{row:1,s:0,n:12,sp:5,step:1}, run:{row:2,s:0,n:8,sp:4,step:1.5} };
+
+// ── 房間定義：每房挑不同物件組合（p=道具名, x=世界x, 底部y；big自動碰撞）──
+function P(name,x,y,scale){return {name,x,y,scale:scale||1};}
+const ROOMS={
+ R1:{name:'1 · 指揮中控室', doors:{right:'R2',down:'R4'}, props:[
+     P('desk_dualmon',300,430),P('tri_monitor',620,340),P('chair_side',360,470),
+     P('server_rack',1450,440),P('hologram_l',1000,330),P('trash',1650,460)]},
+ R2:{name:'2 · 伺服器機房', doors:{left:'R1',right:'R3',down:'R5'}, props:[
+     P('server_tall',250,450),P('server_box',430,450),P('server_rack',610,450),
+     P('server_open',790,450),P('server_cabinet',980,450),P('pipes_big',1450,430),
+     P('drive',1250,455)]},
+ R3:{name:'3 · 全息研究室', doors:{left:'R2',down:'R6'}, props:[
+     P('hologram_l',300,340),P('hologram_m',500,345),P('tank_green',900,440),
+     P('desk_console',1400,430),P('monitor_wide',1400,320),P('laptop_blue',1150,450)]},
+ R4:{name:'4 · 生化實驗室', doors:{up:'R1',right:'R5',down:'R7'}, props:[
+     P('microscope',300,440),P('centrifuge',480,440),P('incubator',660,440),
+     P('vial_rack',900,455),P('flask_pair',1050,455),P('petri',1200,455),
+     P('L_desk',1550,430)]},
+ R5:{name:'5 · 機械組裝區', doors:{up:'R2',left:'R4',right:'R6',down:'R8'}, props:[
+     P('robot_arm',350,450),P('robot_arm',560,450),P('arch_desk',1000,430),
+     P('gas_tanks',1450,460),P('pipes_big',1650,430)]},
+ R6:{name:'6 · 資料終端室', doors:{up:'R3',left:'R5',down:'R9'}, props:[
+     P('desk_terminal',300,430),P('desk_console',600,430),P('laptop',900,450),
+     P('monitor',1150,330),P('stool',1000,460),P('hologram_s',1500,340)]},
+ R7:{name:'7 · 培養槽區', doors:{up:'R4',right:'R8'}, props:[
+     P('tank_green',300,440),P('incubator',520,440),P('flask_two',750,455),
+     P('vial_rack',900,455),P('desk_pipe',1400,430),P('trash_open',1650,460)]},
+ R8:{name:'8 · 綜合辦公區', doors:{up:'R5',left:'R7',right:'R9'}, props:[
+     P('L_desk',300,430),P('stool2',500,460),P('chair_side',600,470),
+     P('laptop_blue',320,455),P('desk_dualmon',1100,430),P('tri_monitor',1450,340)]},
+ R9:{name:'9 · 氣閘出口', doors:{up:'R6',left:'R8'}, props:[
+     P('gas_tanks',300,460),P('pipes_big',550,430),P('airlock',1200,455),
+     P('door_slide',1500,455),P('trash',1000,460)]},
+};
+const OPP={up:'down',down:'up',left:'right',right:'left'};
+
+// 家具碰撞矩形（大型物件；以底部中心與縮放後尺寸的下半部為腳印）
+function propRect(p){
+  const m=PROPS[p.name]; if(!m) return null;
+  const w=m.w*p.scale, h=m.h*p.scale;
+  return {x0:p.x-w*0.42, x1:p.x+w*0.42, y0:p.y-h*0.28, y1:p.y+6, big:m.collide, w,h,m};
+}
+function hitsProp(px,py){
+  for(const p of ROOMS[cur].props){ const m=PROPS[p.name]; if(!m||!m.collide) continue;
+    const r=propRect(p); if(px>r.x0&&px<r.x1&&py>r.y0&&py<r.y1) return true; }
+  return false;
+}
+
+// 門幾何
+const DOOR_W=96,DOOR_H=150;
+function doorRect(d){const cx=ROOM_W/2;
+  if(d==='left')return{x:0,y:FLOOR_TOP-60,w:42,h:DOOR_H};
+  if(d==='right')return{x:ROOM_W-42,y:FLOOR_TOP-60,w:42,h:DOOR_H};
+  if(d==='up')return{x:cx-DOOR_W/2,y:FLOOR_TOP-96,w:DOOR_W,h:64};
+  if(d==='down')return{x:cx-DOOR_W/2,y:FLOOR_BOT-6,w:DOOR_W,h:44};}
+function doorTrig(d){const cx=ROOM_W/2;
+  if(d==='left')return{px:32,py:null}; if(d==='right')return{px:ROOM_W-32,py:null};
+  if(d==='up')return{px:cx,py:FLOOR_TOP+16}; if(d==='down')return{px:cx,py:FLOOR_BOT-12};}
+
+const cam={x:0}; function updCam(t){cam.x=Math.max(0,Math.min(ROOM_W-VIEW_W,t.x-VIEW_W/2));}
+const keys={},jp={};
+cv.addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(!keys[e.code])jp[e.code]=1;keys[e.code]=1;});
+cv.addEventListener('keyup',e=>keys[e.code]=0);
+
+let cur='R1', pulse=0, trans=0;
+const player={x:ROOM_W/2,y:FLOOR_BOT,facing:1,anim:'idle',frame:0,timer:0,speed:4.2};
+
+function enter(room,from){ cur=room;
+  if(from){const sd=OPP[from],t=doorTrig(sd); player.x=t.px; player.y=t.py!=null?t.py:FLOOR_BOT;
+    if(sd==='left')player.x+=64; if(sd==='right')player.x-=64; if(sd==='up')player.y+=48; if(sd==='down')player.y-=48;}
+  else{player.x=ROOM_W/2;player.y=FLOOR_BOT;} trans=1; }
+
+function checkDoors(){const ds=ROOMS[cur].doors;
+  for(const d in ds){const t=doorTrig(d);let hit=false;
+    if(d==='left'&&player.x<=t.px)hit=1; if(d==='right'&&player.x>=t.px)hit=1;
+    if(d==='up'&&Math.abs(player.x-t.px)<DOOR_W/2&&player.y<=t.py)hit=1;
+    if(d==='down'&&Math.abs(player.x-t.px)<DOOR_W/2&&player.y>=t.py)hit=1;
+    if(hit){enter(ds[d],d);return;}}}
+
+function updatePlayer(){
+  let mv=false; const run=keys['ShiftLeft']||keys['ShiftRight']; const sp=run?player.speed*1.7:player.speed;
+  let dx=0,dy=0,nf=player.facing;
+  if(keys['ArrowLeft']){dx-=sp;nf=-1;mv=1;} if(keys['ArrowRight']){dx+=sp;nf=1;mv=1;}
+  if(keys['ArrowUp']){dy-=sp*.7;mv=1;} if(keys['ArrowDown']){dy+=sp*.7;mv=1;}
+  player.facing=nf;
+  if(dx){const nx=player.x+dx; if(!hitsProp(nx,player.y))player.x=nx;}
+  if(dy){const ny=player.y+dy; if(!hitsProp(player.x,ny))player.y=ny;}
+  player.x=Math.max(20,Math.min(ROOM_W-20,player.x));
+  player.y=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,player.y));
+  const na=mv?(run?'run':'walk'):'idle';
+  if(player.anim!==na){player.anim=na;player.frame=0;player.timer=0;}
+  const a=ANIM[player.anim]; player.timer++;
+  if(player.timer>a.sp){player.timer=0;player.frame=(player.frame+1)%a.n;}
+  checkDoors(); updCam(player);
+}
+
+function drawRoom(){
+  // 牆與地板
+  const g=ctx.createLinearGradient(0,0,0,FLOOR_TOP); g.addColorStop(0,'#1b2740');g.addColorStop(1,'#26364f');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VIEW_W,FLOOR_TOP-30);
+  ctx.fillStyle='#2f4059'; ctx.fillRect(0,FLOOR_TOP-30,VIEW_W,VIEW_H-(FLOOR_TOP-30));
+  // 地板格線
+  ctx.strokeStyle='rgba(0,0,0,.18)';ctx.lineWidth=1;
+  for(let gx=0;gx<ROOM_W;gx+=90){const px=gx-cam.x;if(px>-5&&px<VIEW_W+5){ctx.beginPath();ctx.moveTo(px,FLOOR_TOP-30);ctx.lineTo(px,VIEW_H);ctx.stroke();}}
+  ctx.strokeStyle='rgba(140,200,255,.15)';
+  for(let gy=FLOOR_TOP-30+40;gy<VIEW_H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(VIEW_W,gy);ctx.stroke();}
+  ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,FLOOR_TOP-30);ctx.lineTo(VIEW_W,FLOOR_TOP-30);ctx.stroke();
+  // 門
+  pulse+=.08; const ds=ROOMS[cur].doors;
+  for(const d in ds)drawDoor(d);
+}
+function drawDoor(d){const r=doorRect(d),px=r.x-cam.x; if(px>VIEW_W||px+r.w<0)return;
+  const gl=.5+.5*Math.sin(pulse);
+  ctx.save(); ctx.fillStyle='#0a0f18'; ctx.fillRect(px,r.y,r.w,r.h);
+  const gr=ctx.createLinearGradient(px,r.y,px,r.y+r.h);
+  gr.addColorStop(0,`rgba(120,200,255,${.25+.55*gl})`); gr.addColorStop(1,`rgba(40,120,220,${.15+.4*gl})`);
+  ctx.fillStyle=gr; ctx.fillRect(px+5,r.y+5,r.w-10,r.h-10);
+  ctx.strokeStyle=`rgba(150,220,255,${.4+.6*gl})`;ctx.lineWidth=3;ctx.shadowColor='rgba(120,200,255,.9)';ctx.shadowBlur=12+12*gl;
+  ctx.strokeRect(px+2,r.y+2,r.w-4,r.h-4); ctx.restore();
+  ctx.save();ctx.fillStyle=`rgba(255,255,255,${.6+.4*gl})`;ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText({up:'▲',down:'▼',left:'◀',right:'▶'}[d],px+r.w/2,r.y+r.h/2);ctx.restore();}
+
+function drawProp(p){ const m=PROPS[p.name]; if(!m||!propsLoaded)return;
+  const w=m.w*p.scale,h=m.h*p.scale; const sx=p.x-cam.x;
+  if(sx+w/2<0||sx-w/2>VIEW_W)return;
+  // 陰影
+  ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(sx,p.y,w*0.34,9,0,0,Math.PI*2);ctx.fill();
+  ctx.drawImage(propsImg,m.x,m.y,m.w,m.h, sx-w/2, p.y-h, w, h);
+}
+
+function drawPlayer(){ const sx=player.x-cam.x;
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(sx,player.y,18,7,0,0,Math.PI*2);ctx.fill();
+  const a=ANIM[player.anim];
+  let bob=0; if(a.step){const ph=(player.frame+player.timer/(a.sp+1))/a.n*Math.PI*4;bob=Math.abs(Math.sin(ph))*(a.step)*2.2;}
+  if(manLoaded){ const col=a.s+player.frame, cx=MAN_CENTERS[col];
+    const sxr=cx-MAN_CW/2, syr=MAN_ROWTOPS[a.row]; const dh=150, dw=dh*(MAN_CW/MAN_ROWH);
+    const dy=player.y-bob-dh+6;
+    ctx.save();ctx.imageSmoothingEnabled=false;
+    if(player.facing===-1){ctx.translate(sx,0);ctx.scale(-1,1);ctx.drawImage(manProc,sxr,syr,MAN_CW,MAN_ROWH,-dw/2,dy,dw,dh);}
+    else ctx.drawImage(manProc,sxr,syr,MAN_CW,MAN_ROWH,sx-dw/2,dy,dw,dh);
+    ctx.restore();
+  } else { ctx.fillStyle='#4aa3ff';ctx.fillRect(sx-16,player.y-64,32,64); }
+}
+
+function drawHUD(){ ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(10,10,240,30);
+  ctx.fillStyle='#dfe6f2';ctx.font='bold 16px sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('房間 '+ROOMS[cur].name,20,26);
+  const bw=170,bx=VIEW_W-bw-14,by=18;ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(bx,by,bw,8);
+  const pr=cam.x/(ROOM_W-VIEW_W);ctx.fillStyle='#63b3ed';ctx.fillRect(bx+pr*(bw-28),by,28,8);}
+
+function loop(){
+  updatePlayer();
+  ctx.clearRect(0,0,VIEW_W,VIEW_H);
+  drawRoom();
+  // 物件與角色依 y 排序（腳底越低越前）
+  const items=ROOMS[cur].props.map(p=>({y:p.y,d:()=>drawProp(p)}));
+  items.push({y:player.y,d:drawPlayer});
+  items.sort((a,b)=>a.y-b.y).forEach(o=>o.d());
+  drawHUD();
+  if(trans>0){ctx.fillStyle=`rgba(0,0,0,${trans})`;ctx.fillRect(0,0,VIEW_W,VIEW_H);trans-=.05;}
+  requestAnimationFrame(loop);
+}
+enter('R1',null); loop();
+</script>
+</body>
+</html>

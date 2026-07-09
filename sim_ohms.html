@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>歐姆定律模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 歐姆定律模擬儀 · 108課綱 Kb-Ⅳ 電壓、電流與電阻 ===== */
+const TARGETS={ '0.5':0.5, '0.25':0.25, '1.0':1.0 };
+let targetKey='0.5';
+const TOL=0.02;
+
+const ui=buildInstrument({
+  title:'歐姆定律模擬儀 · 護盾產生器',
+  tag:'Kb-Ⅳ 電流電壓電阻',
+  brief:'調整電壓與電阻，然後提交驗證',
+  readouts:[
+    {id:'ro_v',   label:'電壓 V'},
+    {id:'ro_r',   label:'電阻 R'},
+    {id:'ro_i',   label:'電流 I = V/R'},
+    {id:'ro_tgt', label:'目標電流'},
+    {id:'ro_p',   label:'功率 P = VI'},
+    {id:'ro_state',label:'裝置狀態'},
+  ],
+  views:[
+    {id:'circuit', label:'電路'},
+    {id:'graph',   label:'V–I 特性圖'},
+  ],
+  deckHTML:
+    knob('volt','電壓',1,12,1,2,' V') +
+    knob('res','電阻',2,24,2,12,' Ω') +
+    `<div class="knob"><label>目標電流</label>
+      <select id="tgt" style="background:#0a1426;color:#7fdcff;border:1px solid #1e3a5f;
+        border-radius:5px;padding:4px 7px;font-size:11.5px">
+        <option value="0.5">0.50 A</option><option value="0.25">0.25 A</option><option value="1.0">1.00 A</option>
+      </select></div>` +
+    toggle('tg_flow','顯示電流流動',true)
+});
+const cv=ui.cv,ctx=cv.getContext('2d');
+const hintLog=makeHintLog(ui);
+const cap=makeCap(ui,()=>{ui.status.textContent='此機台強化已達上限，仍可自由練習';ui.status.className='hint';});
+const views=makeViews(ui,()=>draw());
+const showFlow=wireToggle('tg_flow',()=>draw());
+
+let W,H,solved=false,applied=false,tested=false,failCount=0,flow=0,anim=null;
+function volt(){return +document.getElementById('volt').value;}
+function res(){return +document.getElementById('res').value;}
+function target(){return TARGETS[targetKey];}
+function current(){return volt()/res();}
+function mode(){const I=current();
+  if(Math.abs(I-target())<TOL)return'ok';return I>target()?'burn':'weak';}
+
+document.getElementById('tgt').onchange=e=>{targetKey=e.target.value;reset();};
+wireKnobs((id,v)=>{setKnobRD(id,v+(id==='volt'?' V':' Ω'));reset();});
+
+function reset(){solved=false;applied=false;tested=false;
+  if(!cap.full)ui.apply.disabled=true;refresh();}
+function refresh(){updateRO();draw();}
+function updateRO(){
+  const I=current(),m=mode();
+  setRO('ro_v',`${volt()} V`,'amber');
+  setRO('ro_r',`${res()} Ω`,'violet');
+  setRO('ro_i',`${volt()} ÷ ${res()} = ${I.toFixed(3)} A`, m==='ok'?'green':'red');
+  setRO('ro_tgt',`${target().toFixed(2)} A`,'green');
+  setRO('ro_p',`${(volt()*I).toFixed(2)} W`);
+  const lbl={ok:'可啟動',burn:'電流過大 → 燒毀',weak:'電流不足 → 無法啟動'}[m];
+  setRO('ro_state', tested?lbl+'（已通電）':lbl+'（預測）', m==='ok'?'green':'red');
+}
+function progressiveHint(){
+  const n=failCount,I=current(),m=mode();
+  if(n<2)return;
+  const obs=m==='burn'?`電流過大（${I.toFixed(2)} A），線路燒毀`:`電流不足（${I.toFixed(2)} A），無法啟動`;
+  let lv,msg;
+  if(n===2){lv=1;
+    msg=`${obs}。電流的大小同時受到「電壓」和「電阻」影響。`
+      + `把電壓想成推水的壓力、電阻想成水管的細窄程度——哪一個讓水流變大？哪一個讓水流變小？`
+      + `<br><span style="opacity:.8">可切換「V–I 特性圖」檢視，看電流隨電壓的變化斜率。</span>`;
+  } else if(n===3){lv=2;
+    msg=`電壓越大，電流越大（成正比）；電阻越大，電流越小（成反比）。`
+      + `目前電流${m==='burn'?'太大':'太小'}，你可以${m==='burn'?'「降低電壓」或「增大電阻」':'「提高電壓」或「減小電阻」'}。`
+      + `注意：兩個旋鈕會互相抵消，真正決定電流的是它們的「比值」。`;
+  } else {lv=3;
+    msg=`歐姆定律 I = V ÷ R。目標電流 I = ${target().toFixed(2)} A。`
+      + `目前 I = ${volt()} ÷ ${res()} = ${I.toFixed(3)} A。`
+      + `請把 V 與 R 調成「電壓 ÷ 電阻 = ${target().toFixed(2)}」的關係——換句話說，電阻應該是電壓的幾倍？`;
+  }
+  hintLog.add(lv,n,msg);
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;draw();}
+window.addEventListener('resize',resize);
+function loopAnim(){if(anim)cancelAnimationFrame(anim);
+  const st=()=>{flow+=0.04;if(views.current==='circuit'&&showFlow())draw();anim=requestAnimationFrame(st);};st();}
+
+function draw(){if(!W)return;ctx.clearRect(0,0,W,H);
+  if(views.current==='graph'){drawGraph();return;}drawCircuit();}
+
+function drawCircuit(){
+  const I=current(),m=mode();
+  const bw=W*0.56,bh=H*0.44,x0=(W-bw)/2,y0=(H-bh)/2-6,x1=x0+bw,y1=y0+bh;
+  ctx.strokeStyle=tested?(m==='ok'?'#7fdcff':(m==='burn'?'#f87171':'#475569')):'#64748b';
+  ctx.lineWidth=5;ctx.strokeRect(x0,y0,bw,bh);
+  if(showFlow()&&(!tested||m!=='weak')){
+    const sp=Math.min(3.2,Math.max(0.3,I*2.4));
+    const per=2*(bw+bh);
+    for(let i=0;i<12;i++){
+      let p=((i*per/12)+flow*sp*40)%per,px,py;
+      if(p<bw){px=x0+p;py=y0;}else if(p<bw+bh){px=x1;py=y0+(p-bw);}
+      else if(p<2*bw+bh){px=x1-(p-bw-bh);py=y1;}else{px=x0;py=y1-(p-2*bw-bh);}
+      ctx.fillStyle=(tested&&m==='burn')?'#fca5a5':'#7fdcff';
+      ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();
+    }
+  }
+  // 電池
+  ctx.fillStyle='#eab308';ctx.fillRect(x0-9,(y0+y1)/2-20,18,40);
+  ctx.fillStyle='#dbeafe';ctx.font='12px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`${volt()} V`,x0,(y0+y1)/2+36);
+  // 電阻
+  ctx.strokeStyle='#a78bfa';ctx.lineWidth=3;ctx.beginPath();
+  const bx=(x0+x1)/2;let zx=bx-24;ctx.moveTo(zx,y0);
+  for(let i=0;i<8;i++){zx+=6;ctx.lineTo(zx,y0+(i%2?8:-8));}ctx.lineTo(bx+24,y0);ctx.stroke();
+  ctx.fillStyle='#c4b5fd';ctx.fillText(`${res()} Ω`,bx,y0-14);
+  // 安培計
+  ctx.strokeStyle='#94a3b8';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(bx,y1,17,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#e2e8f0';ctx.font='10px sans-serif';ctx.fillText('A',bx,y1+4);
+  ctx.fillStyle=m==='ok'?'#4ade80':'#fbbf24';ctx.font='11px sans-serif';
+  ctx.fillText(`${I.toFixed(2)} A`,bx,y1+32);
+  // 護盾產生器
+  const gx=x1,gy=(y0+y1)/2;
+  ctx.beginPath();ctx.arc(gx,gy,22,0,Math.PI*2);
+  ctx.fillStyle=(tested&&m==='ok')?'#4ade80':(tested&&m==='burn'?'#dc2626':'#475569');
+  ctx.fill();
+  if(tested&&m==='ok'){ctx.shadowColor='#4ade80';ctx.shadowBlur=26;ctx.fill();ctx.shadowBlur=0;}
+  ctx.strokeStyle='#94a3b8';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#cbd5e1';ctx.font='11px sans-serif';ctx.fillText('護盾產生器',gx,gy+40);
+  ctx.textAlign='left';
+}
+function drawGraph(){
+  const ox=W*0.14,oy=H*0.84,gw=W*0.72,gh=H*0.68;
+  const maxV=12,maxI=1.6;
+  ctx.strokeStyle='#475569';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(ox,oy-gh);ctx.lineTo(ox,oy);ctx.lineTo(ox+gw,oy);ctx.stroke();
+  ctx.fillStyle='#94a3b8';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('電壓 V (V)',ox+gw/2,oy+30);
+  ctx.save();ctx.translate(ox-34,oy-gh/2);ctx.rotate(-Math.PI/2);
+  ctx.fillText('電流 I (A)',0,0);ctx.restore();
+  for(let v=0;v<=12;v+=2){const px=ox+gw*(v/maxV);
+    ctx.strokeStyle='#1e293b';ctx.beginPath();ctx.moveTo(px,oy);ctx.lineTo(px,oy-gh);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.fillText(v,px,oy+15);}
+  for(let i=0;i<=1.5;i+=0.5){const py=oy-gh*(i/maxI);
+    ctx.strokeStyle='#1e293b';ctx.beginPath();ctx.moveTo(ox,py);ctx.lineTo(ox+gw,py);ctx.stroke();
+    ctx.fillStyle='#64748b';ctx.textAlign='right';ctx.fillText(i.toFixed(1),ox-6,py+4);ctx.textAlign='center';}
+  // 目標電流線
+  const ty=oy-gh*(target()/maxI);
+  ctx.strokeStyle='rgba(74,222,128,0.6)';ctx.setLineDash([6,5]);ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(ox,ty);ctx.lineTo(ox+gw,ty);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#4ade80';ctx.textAlign='left';ctx.font='11px sans-serif';
+  ctx.fillText(`目標 I = ${target().toFixed(2)} A`,ox+6,ty-6);
+  // 目前電阻的 I-V 直線 (斜率 1/R)
+  ctx.strokeStyle='#a78bfa';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(ox,oy);
+  const vEnd=maxV, iEnd=vEnd/res();
+  const pxEnd=ox+gw, pyEnd=oy-gh*Math.min(maxI,iEnd)/maxI;
+  ctx.lineTo(pxEnd,pyEnd);ctx.stroke();
+  ctx.fillStyle='#c4b5fd';ctx.font='11px sans-serif';
+  ctx.fillText(`R = ${res()} Ω（斜率 = 1/R）`,ox+gw*0.55,pyEnd-8);
+  // 目前工作點
+  const I=current();
+  const px=ox+gw*(volt()/maxV), py=oy-gh*Math.min(maxI,I)/maxI;
+  ctx.fillStyle=mode()==='ok'?'#4ade80':'#f87171';
+  ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#e2e8f0';ctx.font='11px sans-serif';
+  ctx.fillText(`(${volt()}V, ${I.toFixed(2)}A)`,px,py-12);
+  ctx.fillStyle='#8ba7c4';
+  ctx.fillText('提示：改變 R 會改變直線斜率；改變 V 則沿直線移動工作點',ox,oy-gh-8);
+  ctx.textAlign='left';
+}
+
+ui.submit.onclick=()=>{
+  if(applied)return;
+  tested=true;updateRO();draw();
+  const m=mode();
+  if(m==='ok'){
+    solved=true;
+    ui.status.textContent='✓ 護盾啟動！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success(`I = ${volt()} ÷ ${res()} = ${current().toFixed(2)} A，恰為目標電流，護盾產生器啟動。`);
+    if(!cap.full)ui.apply.disabled=false;
+  } else {
+    failCount++;solved=false;ui.apply.disabled=true;
+    ui.status.textContent=`✗ 第 ${failCount} 次失敗 — ${m==='burn'?'電流過大燒毀':'電流不足'}`;
+    ui.status.className='bad';progressiveHint();
+  }
+};
+ui.reset.onclick=()=>{failCount=0;hintLog.clear();reset();
+  ui.status.textContent='調整電壓與電阻，然後提交驗證';ui.status.className='hint';};
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true;ui.apply.disabled=true;cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)';ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'shield',amount:30,machine:'ohms'},'*');
+};
+resize();refresh();loopAnim();
+</script>
+</body>
+</html>

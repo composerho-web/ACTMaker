@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電路連接模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 電路連接模擬儀 · 108課綱 Kb-Ⅳ 串聯迴路 ===== */
+const SEG_NAMES={top1:'上方左段',top2:'上方中段',top3:'上方右段',
+                 right:'右側直段',bottom:'下方橫段',left:'左側直段'};
+const ORDER=['top1','top2','top3','right','bottom','left'];
+
+const ui=buildInstrument({
+  title:'電路連接模擬儀',
+  tag:'Kb-Ⅳ 串聯迴路',
+  brief:'點擊線段接通、點擊開關閉合，然後提交驗證',
+  readouts:[
+    {id:'ro_conn', label:'已接通線段'},
+    {id:'ro_open', label:'斷路處'},
+    {id:'ro_sw',   label:'開關狀態'},
+    {id:'ro_path', label:'迴路完整性'},
+    {id:'ro_state',label:'燈泡狀態'},
+  ],
+  views:[
+    {id:'wire', label:'接線圖'},
+    {id:'flow', label:'電流路徑診斷'},
+  ],
+  deckHTML:
+    `<button class="btn ghost" id="connAll">⚡ 全部接通</button>` +
+    `<button class="btn ghost" id="clearAll">✕ 全部斷開</button>` +
+    toggle('tg_sw','開關閉合',false) +
+    toggle('tg_label','顯示線段名稱',true)
+});
+const cv=ui.cv,ctx=cv.getContext('2d');
+const hintLog=makeHintLog(ui);
+const cap=makeCap(ui,()=>{ui.status.textContent='此機台強化已達上限，仍可自由練習';ui.status.className='hint';});
+const views=makeViews(ui,()=>draw());
+const showLabel=wireToggle('tg_label',()=>draw());
+const swOn=wireToggle('tg_sw',()=>{ if(!applied){ powered=false; reset0(); } });
+
+let W,H,segs={},solved=false,applied=false,powered=false,failCount=0,flow=0,anim=null;
+
+function clearSegs(){ ORDER.forEach(k=>segs[k]=false); }
+function openSegs(){ return ORDER.filter(k=>!segs[k]); }
+function closed(){ return openSegs().length===0 && swOn(); }
+
+function reset0(){ solved=false; if(!cap.full)ui.apply.disabled=true; refresh(); }
+function refresh(){updateRO();draw();}
+function updateRO(){
+  const nOpen=openSegs().length, nConn=6-nOpen;
+  setRO('ro_conn',`${nConn} / 6`, nConn===6?'green':'amber');
+  setRO('ro_open', nOpen===0?'無':`${nOpen} 處`, nOpen===0?'green':'red');
+  setRO('ro_sw', swOn()?'閉合':'斷開', swOn()?'green':'red');
+  setRO('ro_path', closed()?'✓ 封閉迴路':'✗ 開路', closed()?'green':'red');
+  const lit = powered && closed();
+  setRO('ro_state', powered?(lit?'發亮':'未亮'):'尚未通電', lit?'green':'red');
+}
+function progressiveHint(){
+  const n=failCount, open=openSegs(), nOpen=open.length;
+  if(n<2)return;
+  let lv,msg;
+  if(n===2){lv=1;
+    msg=`電流像水流，必須沿著「不中斷的封閉迴路」從電池的一端流出、繞一圈回到另一端。`
+      + `目前迴路上還有 ${nOpen} 處未接通${swOn()?'':'，而且開關是斷開的'}。`
+      + `沿著 電池 → 上方 → 右側 → 下方 → 回電池 的路徑，逐段檢查哪裡斷了。`
+      + `<br><span style="opacity:.8">可切換「電流路徑診斷」檢視，直接看電流卡在哪一段。</span>`;
+  } else if(n===3){lv=2;
+    if(!swOn()&&nOpen>0)
+      msg=`有兩類問題並存——「導線未接」和「開關未閉合」。即使所有導線都接好，`
+        + `只要開關斷開，迴路仍不完整（就像水管中間關了閥門）。目前仍有 ${nOpen} 段導線是虛線狀態。`;
+    else if(!swOn())
+      msg=`導線都已接通了，但電流仍過不去。請注意迴路上還有一個「可以開合」的元件——`
+        + `它現在的狀態是否讓電流通過？`;
+    else
+      msg=`開關已閉合，但迴路上還有 ${nOpen} 段導線沒接通（畫面上顯示為虛線）。`
+        + `串聯電路只要有任何一段斷開，整個迴路就不導通。找出那 ${nOpen} 段虛線並接上。`;
+  } else {lv=3;
+    if(nOpen>0)
+      msg=`串聯電路的特性是「一處斷、全部斷」——電流只有一條路徑可走。`
+        + `目前未接通的段落共 ${nOpen} 處，其中一處在「${SEG_NAMES[open[0]]}」。`
+        + `請把畫面上所有「虛線」都點成實線${swOn()?'':'，並且別忘了閉合開關'}。`;
+    else
+      msg=`所有導線都接通了，迴路的實體路徑是完整的。那麼阻斷電流的就只剩下一個`
+        + `可切換狀態的元件——找出它並改變其狀態。`;
+  }
+  hintLog.add(lv,n,msg);
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;draw();}
+window.addEventListener('resize',resize);
+function pts(){
+  const bw=W*0.62,bh=H*0.46,x0=(W-bw)/2,y0=(H-bh)/2,x1=x0+bw,y1=y0+bh;
+  return {x0,y0,x1,y1,bw,bh,A:{x:x0+bw*0.33,y:y0},B:{x:x0+bw*0.66,y:y0}};
+}
+function segEndpoints(P){
+  return {
+    top1:[P.x0,P.y0,P.A.x,P.y0], top2:[P.A.x,P.y0,P.B.x,P.y0], top3:[P.B.x,P.y0,P.x1,P.y0],
+    right:[P.x1,P.y0,P.x1,P.y1], bottom:[P.x1,P.y1,P.x0,P.y1], left:[P.x0,P.y1,P.x0,P.y0]
+  };
+}
+function loopAnim(){if(anim)cancelAnimationFrame(anim);
+  const st=()=>{flow+=0.05;if(powered&&closed())draw();anim=requestAnimationFrame(st);};st();}
+
+function draw(){if(!W)return;ctx.clearRect(0,0,W,H);
+  if(views.current==='flow'){drawFlow();return;}drawWire();}
+
+function drawWire(){
+  const P=pts(),E=segEndpoints(P);
+  const on=powered&&closed();
+  ORDER.forEach(k=>{
+    const [ax,ay,bx,by]=E[k],active=segs[k];
+    ctx.strokeStyle=active?(on?'#7fdcff':'#64748b'):'#334155';
+    ctx.lineWidth=active?5:3;ctx.setLineDash(active?[]:[7,6]);
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();ctx.setLineDash([]);
+    if(showLabel()){
+      ctx.fillStyle=active?'rgba(127,220,255,.7)':'rgba(248,113,113,.75)';
+      ctx.font='10px sans-serif';ctx.textAlign='center';
+      const mx=(ax+bx)/2,my=(ay+by)/2;
+      const off = (k==='right')?18:(k==='left')?-18:0;
+      ctx.fillText(SEG_NAMES[k], mx+off, my + (k==='top1'||k==='top2'||k==='top3' ? -10 : (k==='bottom'?16:0)));
+    }
+  });
+  if(on){ // 電流流動點
+    const per=2*(P.bw+P.bh);
+    for(let i=0;i<12;i++){
+      let p=((i*per/12)+flow*90)%per,px,py;
+      if(p<P.bw){px=P.x0+p;py=P.y0;}else if(p<P.bw+P.bh){px=P.x1;py=P.y0+(p-P.bw);}
+      else if(p<2*P.bw+P.bh){px=P.x1-(p-P.bw-P.bh);py=P.y1;}else{px=P.x0;py=P.y1-(p-2*P.bw-P.bh);}
+      ctx.fillStyle='#7fdcff';ctx.beginPath();ctx.arc(px,py,3.5,0,Math.PI*2);ctx.fill();
+    }
+  }
+  // 電池
+  ctx.fillStyle='#eab308';ctx.fillRect(P.x0-8,(P.y0+P.y1)/2-18,16,36);
+  ctx.fillStyle='#dbeafe';ctx.font='12px sans-serif';ctx.textAlign='center';
+  ctx.fillText('電池',P.x0,(P.y0+P.y1)/2+34);
+  // 開關
+  ctx.strokeStyle=swOn()?'#4ade80':'#f87171';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(P.A.x-14,P.y0);
+  if(swOn())ctx.lineTo(P.A.x+14,P.y0);else ctx.lineTo(P.A.x+10,P.y0-14);
+  ctx.stroke();
+  ctx.fillStyle='#cbd5e1';ctx.font='11px sans-serif';
+  ctx.fillText(swOn()?'開關 閉合':'開關 斷開',P.A.x,P.y0-22);
+  // 電阻
+  ctx.strokeStyle='#a78bfa';ctx.lineWidth=3;ctx.beginPath();
+  let zx=P.B.x-18;ctx.moveTo(zx,P.y0);
+  for(let i=0;i<6;i++){zx+=6;ctx.lineTo(zx,P.y0+(i%2?7:-7));}ctx.lineTo(P.B.x+18,P.y0);ctx.stroke();
+  ctx.fillStyle='#c4b5fd';ctx.fillText('電阻',P.B.x,P.y0-16);
+  // 燈泡
+  const bx=P.x1,by=(P.y0+P.y1)/2;
+  ctx.beginPath();ctx.arc(bx,by,18,0,Math.PI*2);
+  ctx.fillStyle=on?'#fde047':'#475569';ctx.fill();
+  if(on){ctx.shadowColor='#fde047';ctx.shadowBlur=28;ctx.fill();ctx.shadowBlur=0;}
+  ctx.strokeStyle='#94a3b8';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#cbd5e1';ctx.fillText('燈泡',bx,by+38);
+  ctx.textAlign='left';
+}
+function drawFlow(){
+  // 以「電流能走多遠」視覺化斷點
+  const P=pts(),E=segEndpoints(P);
+  ctx.fillStyle='#7fdcff';ctx.font='13px sans-serif';ctx.textAlign='center';
+  ctx.fillText('電流從電池正極出發，依序經過各段；遇到斷路(或斷開的開關)即停止',W/2,24);
+  let blocked=null;
+  // 電流路徑順序：left(回流) 之外，從電池 → top1 → 開關 → top2 → 電阻 → top3 → right → bottom → 回電池
+  const seq=['top1','top2','top3','right','bottom','left'];
+  for(const k of seq){
+    if(!segs[k]){blocked=k;break;}
+    if(k==='top1' && !swOn()){blocked='switch';break;}
+  }
+  ORDER.forEach(k=>{
+    const [ax,ay,bx,by]=E[k];
+    const idx=seq.indexOf(k), bIdx=blocked==='switch'?1:seq.indexOf(blocked);
+    const reached = blocked===null || idx < (blocked==='switch'?1:bIdx);
+    ctx.strokeStyle = !segs[k] ? '#7f1d1d' : (reached?'#22d3ee':'#334155');
+    ctx.lineWidth = segs[k]?5:3; ctx.setLineDash(segs[k]?[]:[7,6]);
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();ctx.setLineDash([]);
+  });
+  // 標出阻斷點
+  if(blocked){
+    let px,py,label;
+    if(blocked==='switch'){px=P.A.x;py=P.y0;label='開關斷開';}
+    else{const [ax,ay,bx,by]=E[blocked];px=(ax+bx)/2;py=(ay+by)/2;label=SEG_NAMES[blocked]+' 斷路';}
+    ctx.strokeStyle='#f87171';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(px,py,16,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px-9,py-9);ctx.lineTo(px+9,py+9);
+    ctx.moveTo(px+9,py-9);ctx.lineTo(px-9,py+9);ctx.stroke();
+    ctx.fillStyle='#fca5a5';ctx.font='12px sans-serif';
+    ctx.fillText(`電流在此中斷：${label}`,W/2,H-40);
+    ctx.fillStyle='#8ba7c4';ctx.font='11px sans-serif';
+    ctx.fillText('串聯電路：一處斷路 → 整個迴路都沒有電流',W/2,H-20);
+  } else {
+    ctx.fillStyle='#4ade80';ctx.font='13px sans-serif';
+    ctx.fillText('✓ 迴路完整，電流可繞行一周',W/2,H-30);
+  }
+  ctx.textAlign='left';
+}
+cv.addEventListener('click',e=>{
+  if(applied||views.current!=='wire')return;
+  const rect=cv.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const P=pts(),E=segEndpoints(P);
+  powered=false;solved=false;if(!cap.full)ui.apply.disabled=true;
+  const near=(ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay,L=Math.hypot(dx,dy);if(!L)return 999;
+    let t=((mx-ax)*dx+(my-ay)*dy)/(L*L);t=Math.max(0,Math.min(1,t));
+    return Math.hypot(mx-(ax+dx*t),my-(ay+dy*t));};
+  if(Math.hypot(mx-P.A.x,my-P.y0)<22){ document.getElementById('tg_sw').click(); return; }
+  for(const k of ORDER){const [ax,ay,bx,by]=E[k];
+    if(near(ax,ay,bx,by)<14){segs[k]=!segs[k];refresh();return;}}
+});
+document.getElementById('connAll').onclick=()=>{if(applied)return;ORDER.forEach(k=>segs[k]=true);powered=false;reset0();};
+document.getElementById('clearAll').onclick=()=>{if(applied)return;clearSegs();powered=false;reset0();};
+
+ui.submit.onclick=()=>{
+  if(applied)return;
+  powered=true;updateRO();draw();
+  if(closed()){
+    solved=true;
+    ui.status.textContent='✓ 迴路接通，燈泡發亮！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success('6 段導線全部接通且開關閉合，形成封閉串聯迴路，電流得以流通。');
+    if(!cap.full)ui.apply.disabled=false;
+  } else {
+    powered=false;draw();
+    failCount++;solved=false;ui.apply.disabled=true;
+    const nOpen=openSegs().length;
+    ui.status.textContent=`✗ 第 ${failCount} 次通電失敗 — 斷路 ${nOpen} 處${swOn()?'':'、開關斷開'}`;
+    ui.status.className='bad';progressiveHint();
+  }
+};
+ui.reset.onclick=()=>{failCount=0;hintLog.clear();clearSegs();
+  if(swOn())document.getElementById('tg_sw').click();
+  powered=false;applied=false;reset0();
+  ui.status.textContent='點擊線段接通、點擊開關閉合，然後提交驗證';ui.status.className='hint';};
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true;ui.apply.disabled=true;cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)';ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'firerate',amount:1,machine:'circuit'},'*');
+};
+clearSegs();resize();refresh();loopAnim();
+</script>
+</body>
+</html>

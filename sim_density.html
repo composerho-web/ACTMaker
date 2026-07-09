@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>密度浮沉模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 密度浮沉模擬儀 · 108課綱 Bb-Ⅳ / Ea-Ⅳ 密度與浮力 ===== */
+const FLUIDS = {
+  brine:{name:'鹽水', rho:1.2, color:'rgba(56,189,248,0.22)', edge:'#7fdcff'},
+  water:{name:'清水', rho:1.0, color:'rgba(96,165,250,0.20)', edge:'#93c5fd'},
+  oil  :{name:'食用油', rho:0.9, color:'rgba(250,204,21,0.16)', edge:'#facc15'},
+};
+let fluidKey='brine';
+const TOL=0.03;
+const G=9.8;
+
+const ui = buildInstrument({
+  title:'密度浮沉模擬儀',
+  tag:'Bb-Ⅳ 密度與浮力',
+  brief:'調整方塊，然後提交驗證',
+  readouts:[
+    {id:'ro_rho',   label:'方塊密度 ρ物'},
+    {id:'ro_rhof',  label:'液體密度 ρ液'},
+    {id:'ro_cmp',   label:'密度比較'},
+    {id:'ro_fb',    label:'浮力 F浮'},
+    {id:'ro_fg',    label:'重力 F重'},
+    {id:'ro_state', label:'預測狀態'},
+  ],
+  views:[
+    {id:'tank',  label:'實驗槽'},
+    {id:'chart', label:'密度比較'},
+    {id:'force', label:'受力分析'},
+  ],
+  deckHTML:
+    knob('mass','質量',10,120,5,80,' g') +
+    knob('vol','體積',10,100,5,40,' cm³') +
+    `<div class="knob"><label>液體</label>
+       <select id="fluid" style="background:#0a1426;color:#7fdcff;border:1px solid #1e3a5f;
+         border-radius:5px;padding:4px 7px;font-size:11.5px">
+         <option value="brine">鹽水 1.2</option>
+         <option value="water">清水 1.0</option>
+         <option value="oil">食用油 0.9</option>
+       </select></div>` +
+    toggle('tg_vec','顯示力向量',true)
+});
+const cv=ui.cv, ctx=cv.getContext('2d');
+const hintLog = makeHintLog(ui);
+const cap = makeCap(ui, ()=>{ ui.status.textContent='此機台強化已達上限，仍可自由練習'; ui.status.className='hint'; });
+const views = makeViews(ui, ()=>draw());
+let showVec = wireToggle('tg_vec', ()=>draw());
+
+let W,H,solved=false,applied=false,tested=false,failCount=0;
+let blockY=0, blockTargetY=0, anim=null;
+
+function mass(){return +document.getElementById('mass').value;}
+function vol(){return +document.getElementById('vol').value;}
+function fluid(){return FLUIDS[fluidKey];}
+function rho(){return mass()/vol();}
+function mode(){const r=rho(),rf=fluid().rho;
+  if(Math.abs(r-rf)<TOL) return 'float';
+  return r>rf ? 'sink':'rise';}
+// 浮力 = ρ液 × V × g (全浸)，重力 = m × g；單位以 mN 近似顯示
+function Fb(){return fluid().rho*vol()*G/100;}
+function Fg(){return mass()*G/100;}
+
+document.getElementById('fluid').onchange=e=>{fluidKey=e.target.value;reset();};
+wireKnobs((id,v)=>{
+  setKnobRD(id, v + (id==='mass'?' g':' cm³'));
+  reset();
+});
+
+function reset(){
+  solved=false; applied=false; tested=false;
+  if(!cap.full) ui.apply.disabled=true;
+  blockY=0; blockTargetY=0;
+  refresh();
+}
+function refresh(){ updateRO(); draw(); }
+
+function updateRO(){
+  const r=rho(), rf=fluid().rho, m=mode();
+  setRO('ro_rho', `${mass()} ÷ ${vol()} = ${r.toFixed(2)} g/cm³`, 'amber');
+  setRO('ro_rhof', `${rf.toFixed(2)} g/cm³ (${fluid().name})`);
+  const cmp = Math.abs(r-rf)<TOL ? 'ρ物 = ρ液' : (r>rf ? 'ρ物 > ρ液' : 'ρ物 < ρ液');
+  setRO('ro_cmp', cmp, Math.abs(r-rf)<TOL?'green':'red');
+  setRO('ro_fb', `${Fb().toFixed(2)} N`, 'violet');
+  setRO('ro_fg', `${Fg().toFixed(2)} N`, 'violet');
+  const lbl={float:'懸浮',sink:'下沉',rise:'上浮'}[m];
+  setRO('ro_state', tested? lbl+'（已驗證）' : lbl+'（預測）', m==='float'?'green':'red');
+}
+
+/* ---- 漸進提示（第2/3/4次錯誤；不直接給答案） ---- */
+function progressiveHint(){
+  const n=failCount, r=rho(), rf=fluid().rho, m=mode();
+  if(n<2) return;
+  const obs = m==='sink' ? '方塊沉到底部' : '方塊浮到液面';
+  let lv,msg;
+  if(n===2){ lv=1;
+    msg=`${obs}。物體在液體中是浮、是沉還是懸浮，取決於它和液體的某個「共同性質」誰大誰小。`
+      + `想想看：同樣一塊鐵會沉，同樣重的一艘船卻會浮，差別在哪裡？`
+      + `<br><span style="opacity:.8">試試切換到「受力分析」檢視，觀察浮力與重力的箭頭長度。</span>`;
+  } else if(n===3){ lv=2;
+    msg=`關鍵性質是「密度」——單位體積所含的質量。${obs}，代表方塊的密度${m==='sink'?'大於':'小於'}`
+      + `${fluid().name}的密度。你有「質量」和「體積」兩個旋鈕，它們如何組合成密度？`
+      + `想讓密度${m==='sink'?'變小':'變大'}，該怎麼調？`;
+  } else { lv=3;
+    msg=`密度 ρ = 質量 ÷ 體積。要讓方塊「懸浮」，它的密度必須恰好等於液體密度：`
+      + `ρ物 = ρ液 = ${rf.toFixed(2)} g/cm³。目前你的方塊 ρ = ${mass()} ÷ ${vol()} = ${r.toFixed(2)}。`
+      + `請調整到「質量 ÷ 體積」剛好等於 ${rf.toFixed(2)}。`;
+  }
+  hintLog.add(lv, n, msg);
+}
+
+function animateDrop(){
+  if(anim)cancelAnimationFrame(anim);
+  const st=()=>{ blockY += (blockTargetY-blockY)*0.12; draw();
+    if(Math.abs(blockTargetY-blockY)>0.5) anim=requestAnimationFrame(st); };
+  st();
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;draw();}
+window.addEventListener('resize',resize);
+
+/* ---- 三種檢視 ---- */
+function draw(){
+  if(!W)return;
+  ctx.clearRect(0,0,W,H);
+  const v=views.current;
+  if(v==='tank') drawTank();
+  else if(v==='chart') drawChart();
+  else drawForce();
+}
+function drawTank(){
+  const f=fluid();
+  const tankX=W*0.28,tankW=W*0.44,tankTop=H*0.12,tankH=H*0.74;
+  ctx.fillStyle=f.color;ctx.fillRect(tankX,tankTop,tankW,tankH);
+  ctx.strokeStyle=f.edge;ctx.lineWidth=3;ctx.strokeRect(tankX,tankTop,tankW,tankH);
+  // 液面波紋
+  ctx.strokeStyle='rgba(255,255,255,0.18)';ctx.lineWidth=1;
+  for(let i=0;i<3;i++){ctx.beginPath();
+    ctx.moveTo(tankX+2,tankTop+6+i*4);ctx.lineTo(tankX+tankW-2,tankTop+6+i*4);ctx.stroke();}
+  ctx.fillStyle=f.edge;ctx.font='12px sans-serif';ctx.textAlign='left';
+  ctx.fillText(`${f.name}  ρ = ${f.rho.toFixed(2)} g/cm³`,tankX,tankTop-8);
+  // 中線
+  const midY=tankTop+tankH/2;
+  ctx.strokeStyle='rgba(74,222,128,0.3)';ctx.setLineDash([6,6]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(tankX,midY);ctx.lineTo(tankX+tankW,midY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(74,222,128,0.5)';ctx.font='10px sans-serif';
+  ctx.fillText('懸浮目標線',tankX+4,midY-5);
+  // 方塊
+  const V=vol(), side=26+V*0.85, by=midY+blockY;
+  ctx.fillStyle='#f59e0b';ctx.fillRect(W/2-side/2,by-side/2,side,side);
+  ctx.strokeStyle='#92400e';ctx.lineWidth=2;ctx.strokeRect(W/2-side/2,by-side/2,side,side);
+  ctx.fillStyle='#1f1300';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`${mass()}g`,W/2,by-2);ctx.fillText(`${V}cm³`,W/2,by+13);
+  // 力向量
+  if(showVec()){
+    const fb=Fb(), fg=Fg(), sc=Math.min(70, 60/Math.max(fb,fg,1)*Math.max(fb,fg));
+    const scale=v=>Math.min(80, v*6);
+    arrow(W/2-side/2-16, by, 0, -scale(fb), '#4ade80', 'F浮');
+    arrow(W/2+side/2+16, by, 0,  scale(fg), '#f87171', 'F重');
+  }
+  ctx.textAlign='left';
+}
+function arrow(x,y,dx,dy,col,label){
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx,y+dy);ctx.stroke();
+  const a=Math.atan2(dy,dx);
+  ctx.beginPath();ctx.moveTo(x+dx,y+dy);
+  ctx.lineTo(x+dx-9*Math.cos(a-0.4),y+dy-9*Math.sin(a-0.4));
+  ctx.lineTo(x+dx-9*Math.cos(a+0.4),y+dy-9*Math.sin(a+0.4));
+  ctx.closePath();ctx.fill();
+  ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText(label, x+dx, y+dy+(dy<0?-8:16));
+}
+function drawChart(){
+  // 密度數線比較
+  const y=H*0.5, x0=W*0.12, x1=W*0.88, maxR=3.0;
+  ctx.strokeStyle='#475569';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();
+  ctx.font='10px sans-serif';ctx.fillStyle='#94a3b8';ctx.textAlign='center';
+  for(let r=0;r<=3;r+=0.5){
+    const px=x0+(x1-x0)*(r/maxR);
+    ctx.strokeStyle='#334155';ctx.beginPath();ctx.moveTo(px,y-6);ctx.lineTo(px,y+6);ctx.stroke();
+    ctx.fillText(r.toFixed(1),px,y+20);
+  }
+  ctx.fillText('密度 (g/cm³)',(x0+x1)/2,y+40);
+  // 三種液體標記
+  Object.values(FLUIDS).forEach((f,i)=>{
+    const px=x0+(x1-x0)*(f.rho/maxR);
+    ctx.strokeStyle=f.edge;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(px,y);ctx.lineTo(px,y-40-i*16);ctx.stroke();
+    ctx.fillStyle=f.edge;ctx.textAlign='center';ctx.font='11px sans-serif';
+    ctx.fillText(`${f.name} ${f.rho}`,px,y-46-i*16);
+  });
+  // 方塊密度指針
+  const r=rho(), px=x0+(x1-x0)*Math.min(maxR,r)/maxR;
+  ctx.fillStyle='#f59e0b';
+  ctx.beginPath();ctx.moveTo(px,y+8);ctx.lineTo(px-8,y+26);ctx.lineTo(px+8,y+26);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#fbbf24';ctx.font='bold 12px sans-serif';
+  ctx.fillText(`方塊 ${r.toFixed(2)}`,px,y+42);
+  // 目標帶
+  const tf=fluid(), tx=x0+(x1-x0)*(tf.rho/maxR), band=(x1-x0)*(TOL/maxR)*2;
+  ctx.fillStyle='rgba(74,222,128,0.25)';
+  ctx.fillRect(tx-band/2, y-8, Math.max(4,band), 16);
+  ctx.fillStyle='#4ade80';ctx.font='10px sans-serif';
+  ctx.fillText('懸浮區',tx,y-14);
+  ctx.textAlign='left';
+}
+function drawForce(){
+  const cx=W*0.5, cy=H*0.48;
+  const side=26+vol()*0.85;
+  ctx.fillStyle='#f59e0b';ctx.fillRect(cx-side/2,cy-side/2,side,side);
+  ctx.strokeStyle='#92400e';ctx.lineWidth=2;ctx.strokeRect(cx-side/2,cy-side/2,side,side);
+  const fb=Fb(), fg=Fg();
+  const sc=v=>Math.min(120, v*10);
+  arrow(cx, cy-side/2, 0, -sc(fb), '#4ade80', `F浮 = ρ液·V·g = ${fb.toFixed(2)} N`);
+  arrow(cx, cy+side/2, 0,  sc(fg), '#f87171', `F重 = m·g = ${fg.toFixed(2)} N`);
+  const net=fb-fg;
+  ctx.font='13px sans-serif';ctx.textAlign='center';
+  ctx.fillStyle = Math.abs(net)<0.05 ? '#4ade80' : (net>0?'#93c5fd':'#fca5a5');
+  const txt = Math.abs(net)<0.05 ? '合力 ≈ 0 → 懸浮'
+            : (net>0 ? `合力向上 ${net.toFixed(2)} N → 上浮` : `合力向下 ${(-net).toFixed(2)} N → 下沉`);
+  ctx.fillText(txt, cx, H*0.9);
+  ctx.fillStyle='#64748b';ctx.font='11px sans-serif';
+  ctx.fillText('提示：浮力只和「液體密度 × 排開體積」有關，與方塊質量無關', cx, H*0.96);
+  ctx.textAlign='left';
+}
+
+/* ---- 提交驗證 ---- */
+ui.submit.onclick=()=>{
+  if(applied)return;
+  tested=true;
+  const m=mode();
+  const tankH=H*0.74, side=26+vol()*0.85;
+  blockTargetY = m==='float' ? 0 : (m==='sink' ? tankH/2-side/2-6 : -(tankH/2-side/2-6));
+  animateDrop(); updateRO();
+  if(m==='float'){
+    solved=true;
+    ui.status.textContent='✓ 方塊懸浮！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success(`ρ物 = ${rho().toFixed(2)} = ρ液，浮力與重力平衡，方塊懸浮於液體中。`);
+    if(!cap.full) ui.apply.disabled=false;
+  } else {
+    failCount++; solved=false; ui.apply.disabled=true;
+    ui.status.textContent=`✗ 第 ${failCount} 次失敗 — 方塊${m==='sink'?'下沉':'上浮'}`;
+    ui.status.className='bad';
+    progressiveHint();
+  }
+};
+ui.reset.onclick=()=>{ failCount=0; hintLog.clear(); reset();
+  ui.status.textContent='調整方塊，然後提交驗證'; ui.status.className='hint'; };
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true; ui.apply.disabled=true; cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)'; ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'maxhp',amount:25,machine:'density'},'*');
+};
+resize(); refresh();
+</script>
+</body>
+</html>

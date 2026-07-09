@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>斜面力學模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 斜面力學模擬儀 · 108課綱 斜面、重力分量與摩擦 ===== */
+const g=9.8, K=3.67;   // K 為校準係數，使 30~50° 成為可行區間
+
+const ui=buildInstrument({
+  title:'斜面力學模擬儀',
+  tag:'Ee-Ⅳ 斜面與摩擦',
+  brief:'調整角度與摩擦，然後提交驗證（釋放滑塊）',
+  readouts:[
+    {id:'ro_ang',  label:'斜面角度 θ'},
+    {id:'ro_mu',   label:'摩擦係數 μ'},
+    {id:'ro_acc',  label:'下滑加速度 a'},
+    {id:'ro_vx',   label:'水平末速 vₓ'},
+    {id:'ro_reach',label:'預估飛行距離'},
+    {id:'ro_state',label:'預測結果'},
+  ],
+  views:[
+    {id:'ramp',  label:'斜面實驗'},
+    {id:'force', label:'力的分解'},
+    {id:'curve', label:'距離-角度曲線'},
+  ],
+  deckHTML:
+    knob('angle','角度',15,75,1,20,'°') +
+    knob('fric','摩擦',0,40,5,25,'') +
+    toggle('tg_vec','顯示力分量',true)
+});
+const cv=ui.cv,ctx=cv.getContext('2d');
+const hintLog=makeHintLog(ui);
+const cap=makeCap(ui,()=>{ui.status.textContent='此機台強化已達上限，仍可自由練習';ui.status.className='hint';});
+const views=makeViews(ui,()=>draw());
+const showVec=wireToggle('tg_vec',()=>draw());
+
+let W,H,solved=false,applied=false,failCount=0,ball=null,anim=null;
+
+function angDeg(){return +document.getElementById('angle').value;}
+function mu(){return (+document.getElementById('fric').value)/100;}
+wireKnobs((id,v)=>{ setKnobRD(id, id==='angle'? v+'°' : (v/100).toFixed(2)); reset(); });
+
+function geom(){
+  const groundY=H*0.78,rampW=W*0.30,rampBaseX=W*0.07;
+  const ang=angDeg()*Math.PI/180;
+  const rampH=rampW*Math.tan(ang);
+  const apexY=groundY-Math.min(rampH,H*0.52);
+  return {groundY,apexX:rampBaseX,apexY,footX:rampBaseX+rampW,footY:groundY,
+          gapX:W*0.58,gapW:W*0.10,sensorX:W*0.90};
+}
+function simulate(){
+  const ang=angDeg()*Math.PI/180, m=mu(), G=geom();
+  const L=Math.hypot(G.footX-G.apexX,G.footY-G.apexY);
+  const acc=g*(Math.sin(ang)-m*Math.cos(ang));
+  if(acc<=0) return {mode:'noslide',G,acc};
+  const v=Math.sqrt(2*acc*L*0.06);
+  const vx=v*Math.cos(ang)*26;
+  const reach=vx*0.42*K, need=G.sensorX-G.footX;
+  const gapS=G.gapX-G.footX, gapE=(G.gapX+G.gapW)-G.footX;
+  let mode;
+  if(reach>=need*0.9&&reach<=need*1.25) mode='ok';
+  else if(reach>=gapS&&reach<=gapE) mode='fell';
+  else if(reach<need*0.9) mode='short';
+  else mode='over';
+  return {mode,vx,reach,need,G,acc,ratio:reach/need};
+}
+function reset(){solved=false;applied=false;ball=null;
+  if(!cap.full)ui.apply.disabled=true;refresh();}
+function refresh(){updateRO();draw();}
+function updateRO(){
+  const r=simulate();
+  setRO('ro_ang',`${angDeg()}°`,'amber');
+  setRO('ro_mu',mu().toFixed(2),'violet');
+  setRO('ro_acc', r.acc<=0?'0（不下滑）':`${r.acc.toFixed(2)} m/s²`, r.acc<=0?'red':'');
+  setRO('ro_vx', r.mode==='noslide'?'—':`${(r.vx*K/100).toFixed(2)} 單位`);
+  setRO('ro_reach', r.mode==='noslide'?'—':`${r.reach.toFixed(0)} px（需 ${r.need.toFixed(0)}）`);
+  const lbl={ok:'抵達感測器',noslide:'不下滑',short:'距離不足',fell:'掉入缺口',over:'飛過頭'}[r.mode];
+  setRO('ro_state',lbl, r.mode==='ok'?'green':'red');
+}
+function progressiveHint(r){
+  const n=failCount;
+  if(n<2)return;
+  let lv,msg;
+  if(r.mode==='noslide'){
+    if(n===2){lv=1;msg=`滑塊完全沒有滑動。沿斜面的下滑力與摩擦力在互相對抗，目前摩擦力贏了。`
+      +`想一想：這兩個力各自跟「角度」有什麼關係？<br><span style="opacity:.8">可切到「力的分解」檢視，比較兩個箭頭的長度。</span>`;}
+    else if(n===3){lv=2;msg=`下滑分力隨角度變陡而「變大」，最大靜摩擦力卻隨角度變陡而「變小」。`
+      +`要讓滑塊開始滑動，你可以往哪個方向調整角度？或者如何調整摩擦？`;}
+    else{lv=3;msg=`物體開始下滑的條件是「重力沿斜面分量 > 摩擦力」，`
+      +`即 sinθ > μ·cosθ（等價於 tanθ > μ）。現在 tan(${angDeg()}°) 與 μ=${mu().toFixed(2)} 的大小關係如何？`;}
+  } else if(r.mode==='short'){
+    if(n===2){lv=1;msg=`滑塊有滑下來，但水平飛行距離不足、還沒到感測器就落地。`
+      +`它離開斜面時的「水平速度」不夠大。想想水平速度由哪些因素決定。`
+      +`<br><span style="opacity:.8">可切到「距離-角度曲線」檢視，看目前落在曲線的哪個位置。</span>`;}
+    else if(n===3){lv=2;msg=`末速由「下滑加速度 × 斜面長度」決定，但飛出去的是「水平分量」= 末速 × cosθ。`
+      +`角度太小則加速度不足；角度太大則水平分量被壓縮。目前 ${angDeg()}° 落在哪一種情況？可以雙向試探。`;}
+    else{lv=3;msg=`水平速度 ∝ √(sinθ − μ·cosθ) × cosθ。這個式子在角度太小或太大時都會變小，`
+      +`存在一個「中間的最佳角度」。另外降低摩擦係數也能增加末速。試著往中間角度靠近。`;}
+  } else if(r.mode==='fell'){
+    if(n===2){lv=1;msg=`滑塊掉進了中間的缺口。它飛出去了，但落點剛好在缺口範圍內——`
+      +`代表水平速度「不上不下」。要嘛更快飛過去，要嘛…想想還有沒有別條路。`;}
+    else if(n===3){lv=2;msg=`既然落點在缺口內，唯一的解法是讓水平飛行距離「明顯變長」，跨過缺口直達感測器。`
+      +`哪些調整會讓末速的水平分量變大？`;}
+    else{lv=3;msg=`水平速度 ∝ √(sinθ − μ·cosθ) × cosθ。注意角度過陡（如 ${angDeg()}°）雖然加速度大，`
+      +`但 cosθ 很小，水平分量反而變少。請往「中等角度」調整，同時考慮降低摩擦。`;}
+  } else {
+    if(n===2){lv=1;msg=`滑塊飛過頭，越過感測器了。水平速度太大。`;}
+    else if(n===3){lv=2;msg=`要減小水平速度，可以降低下滑加速度（增加摩擦），或把角度調離「最佳水平速度」的中間區。`;}
+    else{lv=3;msg=`水平速度 ∝ √(sinθ − μ·cosθ) × cosθ。增大摩擦係數 μ 會直接減小括號內的值，是最直接的減速方式。`;}
+  }
+  hintLog.add(lv,n,msg);
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;draw();}
+window.addEventListener('resize',resize);
+
+function launch(){
+  const r=simulate();
+  if(r.mode==='noslide'){
+    failCount++;ui.status.textContent=`✗ 第 ${failCount} 次失敗 — 摩擦力過大，滑塊不下滑`;
+    ui.status.className='bad';progressiveHint(r);draw();return;
+  }
+  ball={phase:'ramp',t:0,r};
+  if(anim)cancelAnimationFrame(anim);
+  step();
+}
+function finish(r,hit){
+  if(hit){solved=true;
+    ui.status.textContent='✓ 滑塊抵達感測器！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success(`θ=${angDeg()}°、μ=${mu().toFixed(2)} → 水平飛行 ${r.reach.toFixed(0)}px，成功抵達感測器。`);
+    if(!cap.full)ui.apply.disabled=false;
+  } else {
+    failCount++;solved=false;ui.apply.disabled=true;
+    const lbl={short:'距離不足，未達感測器',fell:'掉入缺口',over:'飛過頭，越過感測器'}[r.mode]||'未達成';
+    ui.status.textContent=`✗ 第 ${failCount} 次失敗 — ${lbl}`;ui.status.className='bad';
+    progressiveHint(r);
+  }
+}
+function step(){
+  const G=geom();draw();
+  if(!ball)return;
+  const r=ball.r;ball.t+=0.02;
+  let bx,by;
+  if(ball.phase==='ramp'){
+    const p=Math.min(1,ball.t/0.7);
+    bx=G.apexX+(G.footX-G.apexX)*p;by=G.apexY+(G.footY-G.apexY)*p;
+    if(p>=1){ball.phase='fly';ball.t=0;ball.fx=G.footX;ball.fy=G.footY;}
+  } else if(ball.phase==='fly'){
+    const vxs=r.vx*K;
+    bx=ball.fx+vxs*ball.t*0.42;by=ball.fy-(vxs*0.06*ball.t)+260*ball.t*ball.t;
+    if(by>=G.groundY){by=G.groundY;
+      if(bx>=G.gapX&&bx<=G.gapX+G.gapW){ball.phase='end';ball.hit=false;}
+      else if(bx>=G.sensorX-24){ball.phase='end';ball.hit=true;}
+      else{ball.phase='end';ball.hit=false;}}
+    if(bx>W){ball.phase='end';ball.hit=false;}
+  } else {
+    ctx.fillStyle='#fbbf24';ctx.strokeStyle='#92400e';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(ball.lastx||G.footX,(ball.lasty||G.groundY)-8,8,0,Math.PI*2);ctx.fill();ctx.stroke();
+    finish(r,ball.hit);ball=null;updateRO();return;
+  }
+  ball.lastx=bx;ball.lasty=by;
+  ctx.fillStyle='#fbbf24';ctx.strokeStyle='#92400e';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(bx,by-8,8,0,Math.PI*2);ctx.fill();ctx.stroke();
+  anim=requestAnimationFrame(step);
+}
+function draw(){if(!W)return;ctx.clearRect(0,0,W,H);
+  const v=views.current;
+  if(v==='force'){drawForce();return;} if(v==='curve'){drawCurve();return;} drawRamp();}
+
+function drawRamp(){
+  const G=geom();
+  ctx.fillStyle='#1e293b';
+  ctx.fillRect(G.footX,G.groundY,G.gapX-G.footX,H-G.groundY);
+  ctx.fillRect(G.gapX+G.gapW,G.groundY,W-(G.gapX+G.gapW),H-G.groundY);
+  ctx.fillStyle='#334155';ctx.beginPath();
+  ctx.moveTo(G.apexX,G.apexY);ctx.lineTo(G.footX,G.footY);ctx.lineTo(G.apexX,G.footY);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#64748b';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#7fdcff';ctx.font='12px sans-serif';ctx.textAlign='left';
+  ctx.fillText(`θ = ${angDeg()}°   μ = ${mu().toFixed(2)}`,G.apexX+26,G.footY-8);
+  ctx.strokeStyle=solved?'#4ade80':'#94a3b8';ctx.lineWidth=3;
+  ctx.strokeRect(G.sensorX-14,G.groundY-30,28,30);
+  ctx.fillStyle=solved?'#4ade80':'#94a3b8';ctx.textAlign='center';ctx.font='11px sans-serif';
+  ctx.fillText('感測器',G.sensorX,G.groundY-38);
+  ctx.fillStyle='rgba(239,68,68,0.16)';ctx.fillRect(G.gapX,G.groundY,G.gapW,H-G.groundY);
+  ctx.fillStyle='rgba(248,113,113,0.6)';ctx.font='10px sans-serif';
+  ctx.fillText('缺口',G.gapX+G.gapW/2,G.groundY+16);
+  if(!ball){ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(G.apexX+6,G.apexY-8,8,0,Math.PI*2);ctx.fill();}
+  ctx.textAlign='left';
+}
+function drawForce(){
+  const cx=W*0.44,cy=H*0.52,th=angDeg()*Math.PI/180;
+  const L=Math.min(W*0.3,240);
+  // 斜面
+  ctx.strokeStyle='#64748b';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(cx-L*Math.cos(th),cy-L*Math.sin(th));ctx.lineTo(cx,cy);ctx.stroke();
+  // 方塊
+  ctx.save();ctx.translate(cx-L*0.45*Math.cos(th),cy-L*0.45*Math.sin(th));ctx.rotate(-th);
+  ctx.fillStyle='#f59e0b';ctx.fillRect(-16,-16,32,32);ctx.restore();
+  const ox=cx-L*0.45*Math.cos(th), oy=cy-L*0.45*Math.sin(th);
+  if(showVec()){
+    const Wg=70;
+    av(ox,oy,0,Wg,'#f87171','W = mg（重力）');
+    // 沿斜面分量 W sinθ (指向下坡)
+    const sx=Wg*Math.sin(th)*Math.cos(th), sy=Wg*Math.sin(th)*Math.sin(th);
+    av(ox,oy, sx, sy, '#fbbf24', `W sinθ = ${(Math.sin(th)).toFixed(2)}W`);
+    // 垂直分量 W cosθ
+    const nx=Wg*Math.cos(th)*Math.sin(th), ny=-Wg*Math.cos(th)*Math.cos(th);
+    av(ox,oy, nx, ny, '#93c5fd', `W cosθ = ${(Math.cos(th)).toFixed(2)}W`);
+    // 摩擦力 f = μ N，沿斜面向上
+    const fmag=Wg*mu()*Math.cos(th);
+    av(ox,oy, -fmag*Math.cos(th), -fmag*Math.sin(th), '#a78bfa', `f = μW cosθ`);
+  }
+  ctx.fillStyle='#8ba7c4';ctx.font='12px sans-serif';ctx.textAlign='center';
+  const slide = Math.sin(th) > mu()*Math.cos(th);
+  ctx.fillStyle=slide?'#4ade80':'#f87171';ctx.font='13px sans-serif';
+  ctx.fillText(slide?`sinθ (${Math.sin(th).toFixed(2)}) > μcosθ (${(mu()*Math.cos(th)).toFixed(2)}) → 會下滑`
+    :`sinθ (${Math.sin(th).toFixed(2)}) ≤ μcosθ (${(mu()*Math.cos(th)).toFixed(2)}) → 不下滑`, W/2, H-24);
+  ctx.textAlign='left';
+}
+function av(x,y,dx,dy,col,lab){
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx,y+dy);ctx.stroke();
+  const a=Math.atan2(dy,dx);
+  ctx.beginPath();ctx.moveTo(x+dx,y+dy);
+  ctx.lineTo(x+dx-8*Math.cos(a-0.4),y+dy-8*Math.sin(a-0.4));
+  ctx.lineTo(x+dx-8*Math.cos(a+0.4),y+dy-8*Math.sin(a+0.4));
+  ctx.closePath();ctx.fill();
+  ctx.font='10px sans-serif';ctx.textAlign='left';
+  ctx.fillText(lab,x+dx+5,y+dy+3);
+}
+function drawCurve(){
+  const ox=W*0.12,oy=H*0.84,gw=W*0.76,gh=H*0.66;
+  const G=geom(), need=G.sensorX-G.footX;
+  ctx.strokeStyle='#475569';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(ox,oy-gh);ctx.lineTo(ox,oy);ctx.lineTo(ox+gw,oy);ctx.stroke();
+  ctx.fillStyle='#94a3b8';ctx.font='11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('斜面角度 θ (°)',ox+gw/2,oy+28);
+  ctx.save();ctx.translate(ox-32,oy-gh/2);ctx.rotate(-Math.PI/2);ctx.fillText('飛行距離 (px)',0,0);ctx.restore();
+  // 目標帶
+  const yFor=v=>oy-gh*Math.min(1,v/(need*1.5));
+  ctx.fillStyle='rgba(74,222,128,0.16)';
+  ctx.fillRect(ox, yFor(need*1.25), gw, yFor(need*0.9)-yFor(need*1.25));
+  ctx.fillStyle='#4ade80';ctx.textAlign='left';ctx.font='10px sans-serif';
+  ctx.fillText('成功區間',ox+5,yFor(need*1.25)+12);
+  // 曲線（目前 μ 下的 reach vs angle）
+  ctx.strokeStyle='#7fdcff';ctx.lineWidth=2.5;ctx.beginPath();
+  let first=true;
+  for(let a=15;a<=75;a++){
+    const th=a*Math.PI/180;
+    const L=Math.hypot(G.footX-G.apexX, G.footY-(G.groundY-Math.min(W*0.30*Math.tan(th),H*0.52)));
+    const acc=g*(Math.sin(th)-mu()*Math.cos(th));
+    const reach = acc<=0?0: Math.sqrt(2*acc*L*0.06)*Math.cos(th)*26*0.42*K;
+    const px=ox+gw*((a-15)/60), py=yFor(reach);
+    if(first){ctx.moveTo(px,py);first=false;}else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  // 目前工作點
+  const r=simulate();
+  const px=ox+gw*((angDeg()-15)/60), py=yFor(r.mode==='noslide'?0:r.reach);
+  ctx.fillStyle=r.mode==='ok'?'#4ade80':'#f87171';
+  ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fill();
+  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#e2e8f0';ctx.textAlign='center';ctx.font='11px sans-serif';
+  ctx.fillText(`${angDeg()}°`,px,py-12);
+  ctx.fillStyle='#8ba7c4';ctx.font='11px sans-serif';
+  ctx.fillText(`目前 μ = ${mu().toFixed(2)}　曲線在中間角度有最大值`,ox+gw/2,oy-gh-8);
+  ctx.textAlign='left';
+}
+
+ui.submit.onclick=()=>{if(applied)return;launch();};
+ui.reset.onclick=()=>{failCount=0;hintLog.clear();reset();
+  ui.status.textContent='調整角度與摩擦，然後提交驗證（釋放滑塊）';ui.status.className='hint';};
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true;ui.apply.disabled=true;cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)';ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'speed',amount:6,machine:'mechanics'},'*');
+};
+resize();refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,2494 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NTUSTMEG ACTGame Maker</title>
+<style>
+:root{--primary:#0f4c81;--secondary:#0ea5e9;--accent:#20c997;--bg:#f4f6f9;--panel:#fff;--border:#ddd;--text:#333;}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* 啟動畫面 */
+#splash-screen{position:fixed;inset:0;z-index:999999;background:linear-gradient(135deg,#0a2540,#0f4c81);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;transition:opacity .8s}
+.splash-logo{width:110px;height:110px;border-radius:16px;object-fit:cover;background:#fff;cursor:pointer;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.splash-title{font-size:2.1em;font-weight:900;margin-top:22px;letter-spacing:1px;text-shadow:0 4px 14px rgba(0,0,0,.6)}
+.splash-copy{margin-top:10px;font-size:.85em;color:#a7f3d0}
+
+/* 頂列 */
+.topbar{background:var(--primary);color:#fff;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3);z-index:50}
+.topbar img{width:34px;height:34px;border-radius:7px;background:#fff;object-fit:cover;cursor:pointer}
+.topbar h1{margin:0;font-size:1.05em;font-weight:800;letter-spacing:.5px}
+.topbar input{padding:6px 10px;border-radius:6px;border:none;font-size:.9em;width:190px}
+.topbar .sp{flex:1}
+.tbtn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.25);padding:7px 13px;border-radius:7px;cursor:pointer;font-size:.85em;font-weight:600}
+.tbtn:hover{background:rgba(255,255,255,.26)}
+.tbtn.go{background:var(--accent);border-color:var(--accent)}
+.tbtn.go:hover{background:#17a97f}
+.tbtn.warn{background:#e8590c;border-color:#e8590c}
+
+/* 主體 */
+.main{flex:1;display:flex;min-height:0}
+.sidebar{width:250px;flex:none;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.add-btn-container{padding:10px}
+.btn-add{width:100%;background:var(--accent);color:#fff;border:none;padding:11px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:.92em}
+.btn-add:hover{background:#17a97f}
+.scene-list{flex:1;overflow-y:auto;padding:0 10px 10px}
+.scene-item{background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:8px;cursor:pointer;position:relative}
+.scene-item:hover{border-color:var(--secondary)}
+.scene-item.active{border-color:var(--primary);background:#e7f1fa;box-shadow:0 0 0 2px rgba(15,76,129,.15)}
+.scene-item h4{margin:0 0 4px;font-size:.94em;color:var(--primary)}
+.scene-badges{display:flex;gap:4px;flex-wrap:wrap;font-size:.68em}
+.sb{background:#e9ecef;border-radius:4px;padding:1px 5px;color:#555}
+.sb.start{background:#d3f9d8;color:#2b8a3e}
+.sb.end{background:#ffe3e3;color:#c92a2a}
+.sb.mac{background:#e5dbff;color:#5f3dc4}
+
+.editor-area{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.view-tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.view-tab{padding:11px 18px;cursor:pointer;font-weight:600;font-size:.9em;color:#666;border-bottom:3px solid transparent}
+.view-tab.active{color:var(--primary);border-bottom-color:var(--primary);background:#f0f6fb}
+
+#room-view{flex:1;display:flex;min-height:0}
+#stage-wrap{flex:1;position:relative;background:#1b2430;min-width:0;overflow:hidden}
+#stage{display:block;width:100%;height:100%;cursor:crosshair}
+#stage-hint{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(220,53,69,.92);color:#fff;padding:8px 18px;border-radius:18px;font-weight:bold;font-size:.85em;display:none;z-index:20;pointer-events:none}
+#stage-info{position:absolute;bottom:10px;left:10px;background:rgba(10,20,30,.8);color:#bcd;padding:6px 12px;border-radius:8px;font-size:.75em;z-index:15;pointer-events:none;line-height:1.6}
+
+/* 右側工具面板 */
+#tools{width:290px;flex:none;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.tool-sec{border-bottom:1px solid var(--border);padding:10px 12px}
+.tool-sec h3{margin:0 0 8px;font-size:.85em;color:var(--primary);font-weight:800;letter-spacing:.4px}
+.tool-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tbtn2{flex:1;min-width:76px;background:#f1f3f5;border:1px solid var(--border);border-radius:6px;padding:7px 4px;cursor:pointer;font-size:.76em;font-weight:600;color:#444}
+.tbtn2:hover{background:#e7f1fa;border-color:var(--secondary)}
+.tbtn2.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+#obj-lib{flex:1;overflow-y:auto;padding:8px 10px;min-height:0}
+.lib-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.lib-cell{background:#f8f9fa;border:1px solid var(--border);border-radius:6px;padding:4px;cursor:pointer;text-align:center}
+.lib-cell:hover{border-color:var(--secondary);background:#e7f1fa}
+.lib-cell.on{border-color:var(--primary);box-shadow:0 0 0 2px rgba(15,76,129,.2)}
+.lib-cell canvas{display:block;width:100%;height:42px;image-rendering:pixelated}
+.lib-cell span{display:block;font-size:.6em;color:#666;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 流程圖 */
+#flow-view{flex:1;position:relative;overflow:auto;background:#eef2f6;display:none}
+#flow-canvas{position:absolute;top:0;left:0}
+#flow-nodes{position:absolute;top:0;left:0;width:100%;height:100%}
+.flow-node{position:absolute;background:#fff;border:2px solid var(--primary);border-radius:10px;padding:9px 12px;min-width:140px;cursor:move;box-shadow:0 3px 10px rgba(0,0,0,.12);user-select:none}
+.flow-node.start-node{border-color:#2b8a3e;background:#ebfbee}
+.flow-node.end-node{border-color:#c92a2a;background:#fff5f5}
+.flow-node h4{margin:0 0 5px;font-size:.86em;color:var(--primary)}
+.flow-stats{display:flex;gap:7px;font-size:.68em;color:#666;flex-wrap:wrap}
+
+/* Modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:none;justify-content:center;align-items:center;padding:20px}
+.modal-backdrop.show{display:flex}
+.panel{background:#fff;border-radius:12px;width:760px;max-width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.panel-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:2px solid var(--border)}
+.panel-header h2{margin:0;font-size:1.15em;color:var(--primary)}
+.btn-close{background:none;border:none;font-size:1.6em;cursor:pointer;color:#888;line-height:1}
+.panel-body{padding:16px 18px;overflow-y:auto;flex:1}
+.panel-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.btn-save{background:var(--primary);color:#fff;border:none;padding:9px 20px;border-radius:7px;font-weight:bold;cursor:pointer}
+.btn-delete{background:#dc3545;color:#fff;border:none;padding:9px 20px;border-radius:7px;font-weight:bold;cursor:pointer}
+.form-row{display:flex;gap:12px;flex-wrap:wrap}
+.form-group{flex:1;min-width:180px;margin-bottom:12px}
+.form-group label{display:block;font-weight:bold;font-size:.84em;margin-bottom:5px;color:#444}
+.form-control{width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:.9em;font-family:inherit}
+.section-title{font-size:.95em;color:var(--primary);border-bottom:2px solid var(--border);padding-bottom:6px;margin:16px 0 10px}
+.img-preview-box{max-width:100%;max-height:110px;margin-top:6px;border-radius:6px;display:none;border:1px solid var(--border)}
+.img-multi-preview{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.img-multi-preview img,.img-multi-preview video{width:64px;height:64px;object-fit:cover;border-radius:5px;border:1px solid var(--border)}
+.media-row{display:flex;gap:6px;margin-bottom:6px}
+.hint-note{font-size:.78em;color:#0369a1;background:#eef9ff;border:1px solid #b6e3f7;border-radius:6px;padding:8px 10px;line-height:1.6;margin-bottom:10px}
+.warn-note{font-size:.78em;color:#856404;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;padding:8px 10px;line-height:1.6}
+
+/* 預覽 */
+#preview-overlay{display:none;position:fixed;inset:0;z-index:99999;background:#fff;flex-direction:column}
+#preview-bar{background:var(--primary);color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+#preview-frame{flex:1;border:none;width:100%}
+
+/* 通用 */
+.chip{display:inline-block;background:#e7f1fa;border:1px solid #b6d4ea;color:var(--primary);border-radius:12px;padding:2px 9px;font-size:.72em;margin:2px}
+.trg-item{border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:7px;background:#fafbfc;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.trg-item small{color:#888}
+.mini{padding:4px 9px;font-size:.76em;border-radius:5px;border:none;cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<div id="splash-screen">
+  <img src="https://i.ibb.co/HLhqbPxD/unnamed.png" class="splash-logo" alt="NTUSTMEG"
+       onclick="window.open('https://sites.google.com/view/hthou','_blank')" title="前往團隊網站">
+  <div class="splash-title">NTUSTMEG ACTGame Maker</div>
+  <div class="splash-copy">(C) 2026 Copyright by NTUSTMEG</div>
+</div>
+
+<div class="topbar">
+  <img src="https://i.ibb.co/HLhqbPxD/unnamed.png" alt="Logo" onclick="window.open('https://sites.google.com/view/hthou','_blank')">
+  <h1>NTUSTMEG ACTGame Maker</h1>
+  <input type="text" id="game-name" placeholder="遊戲名稱">
+  <button class="tbtn" onclick="openGlobalSettings()">⚙️ 全域設定</button>
+  <div class="sp"></div>
+  <button class="tbtn" onclick="exportTXT()">📤 匯出專案</button>
+  <label class="tbtn" style="display:inline-block">📥 匯入專案<input type="file" accept=".txt,.json" style="display:none" onchange="importTXT(event)"></label>
+  <button class="tbtn" onclick="loadDemo()">🎁 載入示範</button>
+  <button class="tbtn go" onclick="previewGame()">▶️ 試玩</button>
+  <button class="tbtn warn" onclick="exportGameZip()">📦 匯出遊戲(ZIP)</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="add-btn-container"><button class="btn-add" onclick="createNewRoom()">＋ 新增房間 (Room)</button></div>
+    <div class="scene-list" id="room-list"></div>
+  </div>
+
+  <div class="editor-area">
+    <div class="view-tabs">
+      <div class="view-tab active" onclick="switchView('room')">🏠 房間編輯與觸發點</div>
+      <div class="view-tab" onclick="switchView('flow')">🗺️ 房間路徑架構圖</div>
+    </div>
+
+    <div id="room-view">
+      <div id="stage-wrap">
+        <canvas id="stage"></canvas>
+        <div id="stage-hint">請在畫面上點擊以放置</div>
+        <div id="stage-info"></div>
+      </div>
+      <div id="tools">
+        <div class="tool-sec">
+          <h3>🖱️ 編輯模式</h3>
+          <div class="tool-row">
+            <button class="tbtn2 on" id="m-select" onclick="setMode('select')">選取/移動</button>
+            <button class="tbtn2" id="m-object" onclick="setMode('object')">放置物件</button>
+          </div>
+          <div class="tool-row">
+            <button class="tbtn2" id="m-trigger" onclick="setMode('trigger')">放置觸發點</button>
+            <button class="tbtn2" id="m-erase" onclick="setMode('erase')">刪除</button>
+          </div>
+          <div class="tool-row">
+            <label style="font-size:.76em;color:#555;display:flex;align-items:center;gap:5px">
+              <input type="checkbox" id="chk-upper" onchange="redrawStage()"> 編輯上層(樓中樓)
+            </label>
+          </div>
+        </div>
+
+        <div class="tool-sec">
+          <h3>🎯 新增觸發點類型</h3>
+          <select id="trg-type" class="form-control" style="font-size:.82em">
+            <option value="info">ℹ️ 資訊點（文件）</option>
+            <option value="check">❓ 檢驗點</option>
+            <option value="interact">💬 互動點</option>
+            <option value="portal">⬆️ 穿越點（出入口）</option>
+            <option value="embed">🔗 嵌入點</option>
+            <option value="machine">⚗️ 機台（實驗模擬）</option>
+          </select>
+          <div style="font-size:.7em;color:#888;margin-top:5px;line-height:1.5">選好類型後，切到「放置觸發點」再點畫面落點。</div>
+        </div>
+
+        <div class="tool-sec" style="padding-bottom:6px">
+          <h3>🧱 物件庫（點選後放置）</h3>
+          <div class="tool-row">
+            <button class="tbtn2" onclick="setObjSource('builtin')" id="src-builtin">內建圖庫</button>
+            <button class="tbtn2" onclick="setObjSource('custom')" id="src-custom">自訂圖片</button>
+          </div>
+          <div id="custom-obj-grp" style="display:none">
+            <input type="text" id="custom-obj-url" class="form-control" placeholder="圖片網址" style="font-size:.78em">
+            <div class="tool-row" style="margin-top:5px">
+              <label style="font-size:.72em;color:#555;flex:1">寬<input type="number" id="custom-obj-w" class="form-control" value="120" style="font-size:.78em"></label>
+              <label style="font-size:.72em;color:#555;flex:1">高<input type="number" id="custom-obj-h" class="form-control" value="120" style="font-size:.78em"></label>
+            </div>
+            <label style="font-size:.72em;color:#555;display:flex;align-items:center;gap:5px;margin-top:4px">
+              <input type="checkbox" id="custom-obj-collide" checked> 可碰撞（可站立）
+            </label>
+          </div>
+        </div>
+        <div id="obj-lib"><div class="lib-grid" id="lib-grid"></div></div>
+
+        <div class="tool-sec">
+          <h3>🏠 房間</h3>
+          <button class="btn-add" style="background:var(--secondary);font-size:.84em;padding:9px" onclick="openRoomSettings()">📝 房間設定（含敵人）</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="flow-view">
+      <canvas id="flow-canvas"></canvas>
+      <div id="flow-nodes"></div>
+    </div>
+  </div>
+</div>
+<!-- ============ 房間設定 ============ -->
+<div class="modal-backdrop" id="room-modal"><div class="panel">
+  <div class="panel-header"><h2>📝 房間設定</h2><button class="btn-close" onclick="closeModal('room-modal')">×</button></div>
+  <div class="panel-body">
+    <input type="hidden" id="r-id">
+    <div class="form-row">
+      <div class="form-group"><label>房間名稱</label><input type="text" id="r-name" class="form-control"></div>
+      <div class="form-group"><label>房間類型</label>
+        <select id="r-tall" class="form-control">
+          <option value="0">🏠 單層房間</option>
+          <option value="1">🏢 樓中樓（上下兩層）</option>
+        </select>
+      </div>
+    </div>
+    <div id="r-tall-note" class="hint-note" style="display:none">
+      🏢 <b>樓中樓</b>：房間有上下兩層，玩家走到內部樓梯按 ↑/↓ 切換樓層。可在右側工具勾選「編輯上層」來擺放上層物件與觸發點。
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>背景色</label><input type="color" id="r-bg" class="form-control" value="#26202a" style="height:38px;padding:3px"></div>
+      <div class="form-group"><label>地板色</label><input type="color" id="r-floor" class="form-control" value="#3f3348" style="height:38px;padding:3px"></div>
+      <div class="form-group"><label>裝飾色</label><input type="color" id="r-accent" class="form-control" value="#8a5aaa" style="height:38px;padding:3px"></div>
+    </div>
+    <div class="form-group">
+      <label>🎵 此房間背景音樂 (BGM) 網址 <span style="font-weight:normal;color:#888;font-size:.85em">（可留空）</span></label>
+      <input type="text" id="r-bgm" class="form-control" placeholder="https://...">
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label><input type="radio" name="r-se" id="r-isStart" value="start"> 標記為「起始房間」</label></div>
+      <div class="form-group"><label><input type="radio" name="r-se" id="r-isEnd" value="end" onchange="toggleEndForm()"> 標記為「結局房間」</label></div>
+      <div class="form-group"><label><input type="radio" name="r-se" id="r-isNormal" value="normal" checked onchange="toggleEndForm()"> 一般房間</label></div>
+    </div>
+
+    <h3 class="section-title">👾 敵人設定</h3>
+    <div class="form-row">
+      <div class="form-group"><label>敵人數量</label><input type="number" id="r-enemyCount" class="form-control" value="2" min="0" max="12"></div>
+      <div class="form-group"><label>每隻敵人能量 (HP)</label><input type="number" id="r-enemyHp" class="form-control" value="60" min="1"></div>
+      <div class="form-group"><label>敵人攻擊力</label><input type="number" id="r-enemyAtk" class="form-control" value="10" min="0"></div>
+    </div>
+    <div class="hint-note">敵人會在此房間隨機生成（避開家具）。清空敵人後房間標記為已清除。</div>
+
+    <h3 class="section-title">📜 前情提要</h3>
+    <div class="form-group">
+      <div id="list-r-preMedia"></div>
+      <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-r-preMedia','prev-r-preMedia')">+ 新增媒體</button>
+      <div id="prev-r-preMedia" class="img-multi-preview"></div>
+    </div>
+    <div class="form-group"><label>說明文字</label><textarea id="r-preStory" class="form-control" rows="3"></textarea></div>
+
+    <div id="r-end-grp" style="display:none;background:#fff8e1;padding:14px;border-radius:8px">
+      <h3 class="section-title" style="margin-top:0;color:#856404;border-color:#856404">🎉 結局設定</h3>
+      <div class="form-group"><label>遊戲結束條件</label>
+        <select id="r-endCondition" class="form-control">
+          <option value="arrive">抵達房間即跳至結局說明</option>
+          <option value="clear">清除本房間所有敵人後結局</option>
+          <option value="trigger">藉由特定觸發點觸發遊戲結束</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div id="list-r-endMedia"></div>
+        <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-r-endMedia','prev-r-endMedia')">+ 新增媒體</button>
+        <div id="prev-r-endMedia" class="img-multi-preview"></div>
+      </div>
+      <div class="form-group"><label>結局文字</label><textarea id="r-endStory" class="form-control" rows="3"></textarea></div>
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn-delete" onclick="deleteCurrentRoom()">🗑️ 刪除房間</button>
+    <button class="btn-save" onclick="saveRoomSettings()">💾 儲存</button>
+  </div>
+</div></div>
+
+<!-- ============ 觸發點設定 ============ -->
+<div class="modal-backdrop" id="trg-modal"><div class="panel" style="width:820px">
+  <div class="panel-header"><h2 id="trg-modal-title">🎯 觸發點設定</h2><button class="btn-close" onclick="closeModal('trg-modal')">×</button></div>
+  <div class="panel-body">
+    <input type="hidden" id="t-id"><input type="hidden" id="t-type">
+    <div class="form-row">
+      <div class="form-group"><label>觸發點名稱</label><input type="text" id="t-title" class="form-control"></div>
+      <div class="form-group"><label>觸發半徑 (px)</label><input type="number" id="t-radius" class="form-control" value="70" min="20" max="300"></div>
+    </div>
+    <div class="form-group">
+      <label style="color:var(--primary)">🔒 解鎖前提條件</label>
+      <div id="t-conditions" style="background:#f8f9fa;padding:13px;border-radius:6px;max-height:190px;overflow-y:auto;border:1px solid #ccc"></div>
+    </div>
+
+    <!-- 穿越點 -->
+    <div id="t-portal-grp" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label>目標房間</label><select id="t-targetRoom" class="form-control"></select></div>
+        <div class="form-group"><label>穿越轉場特效</label>
+          <select id="t-transition" class="form-control">
+            <option value="none">無 (瞬間切換)</option><option value="fadeBlack">淡入淡出 (黑)</option>
+            <option value="fadeWhite">淡入淡出 (白)</option><option value="zoom">放大進入</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint-note">穿越點即房間的「出入口」。玩家走近並按 X 即可前往目標房間。</div>
+    </div>
+
+    <!-- 資訊點 -->
+    <div id="t-info-grp" style="display:none">
+      <div class="form-group">
+        <div id="list-t-infoMedia"></div>
+        <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-t-infoMedia','prev-t-infoMedia')">+ 新增媒體</button>
+        <div id="prev-t-infoMedia" class="img-multi-preview"></div>
+      </div>
+      <div class="form-group"><label>資訊文字（文件內容）</label><textarea id="t-infoText" class="form-control" rows="4"></textarea></div>
+      <div class="form-group"><label>外部連結</label><input type="text" id="t-infoLink" class="form-control"></div>
+      <div class="form-group t-reward-grp" style="display:none"><label>🎁 閱讀後給予道具</label><select id="t-infoReward" class="form-control"></select></div>
+    </div>
+
+    <!-- 嵌入點 -->
+    <div id="t-embed-grp" style="display:none">
+      <div class="form-group"><label>嵌入網址</label><input type="text" id="t-embedUrl" class="form-control" placeholder="https://...">
+        <div style="font-size:.78em;color:#888;margin-top:5px;line-height:1.5">部分網站會限制被嵌入；若無法顯示，玩家可點框上方「在新分頁開啟」。</div>
+      </div>
+    </div>
+
+    <!-- 機台 -->
+    <div id="t-machine-grp" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label>選擇機台（國中理化模擬）</label>
+          <select id="t-machineId" class="form-control" onchange="onMachinePick()"></select>
+        </div>
+        <div class="form-group"><label>最多成功次數（強化上限）</label><input type="number" id="t-machineMax" class="form-control" value="2" min="1" max="5"></div>
+      </div>
+      <div id="t-machine-desc" class="hint-note"></div>
+      <div class="form-group">
+        <button class="btn-save" style="background:var(--accent)" onclick="previewMachine()">🔍 預覽此機台</button>
+        <span style="font-size:.78em;color:#888;margin-left:8px">會另開視窗載入模擬儀器</span>
+      </div>
+      <div id="machine-preview-wrap" style="display:none;margin-top:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="background:var(--primary);color:#fff;padding:6px 10px;font-size:.82em;display:flex;justify-content:space-between">
+          <span id="machine-preview-title"></span>
+          <button class="mini" style="background:rgba(0,0,0,.3);color:#fff" onclick="closeMachinePreview()">關閉</button>
+        </div>
+        <iframe id="machine-preview-frame" style="width:100%;height:440px;border:none;background:#0b1120"></iframe>
+      </div>
+    </div>
+
+    <!-- 檢驗點 -->
+    <div id="t-check-grp" style="display:none">
+      <div class="form-group">
+        <div id="list-t-checkMedia"></div>
+        <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-t-checkMedia','prev-t-checkMedia')">+ 新增媒體</button>
+        <div id="prev-t-checkMedia" class="img-multi-preview"></div>
+      </div>
+      <div class="form-group"><label>題目說明</label><textarea id="t-checkQ" class="form-control" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>比對方式</label>
+          <select id="t-checkType" class="form-control">
+            <option value="exact">一字不差</option><option value="contains_any">包含任一字彙(逗號分隔)</option>
+            <option value="contains_all">包含所有字彙(逗號分隔)</option><option value="regex">正規表達式</option>
+          </select>
+        </div>
+        <div class="form-group"><label>答案</label><input type="text" id="t-checkAns" class="form-control"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>獲得分數</label><input type="number" id="t-checkScore" class="form-control" value="1"></div>
+        <div class="form-group t-reward-grp" style="display:none"><label>🎁 答對後給予道具</label><select id="t-checkReward" class="form-control"></select></div>
+      </div>
+      <div class="form-group" id="t-checkJumpEnd-grp" style="display:none">
+        <label class="warn-note" style="display:block"><input type="checkbox" id="t-checkJumpEnd"> 🎉 成功後直接跳至結局</label>
+      </div>
+      <h3 class="section-title">🎬 答對後串場回饋 (選填)</h3>
+      <div class="form-group">
+        <div id="list-t-checkFbMedia"></div>
+        <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-t-checkFbMedia','prev-t-checkFbMedia')">+ 新增回饋媒體</button>
+        <div id="prev-t-checkFbMedia" class="img-multi-preview"></div>
+      </div>
+      <div class="form-group"><label>回饋文字</label><textarea id="t-checkFbText" class="form-control" rows="2"></textarea></div>
+      <h3 class="section-title">💡 多重提示設定</h3>
+      <div id="t-hints-list"></div>
+      <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addTHint()">+ 新增一筆提示</button>
+    </div>
+
+    <!-- 互動點 -->
+    <div id="t-interact-grp" style="display:none">
+      <div class="form-group">
+        <div id="list-t-interactMedia"></div>
+        <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-t-interactMedia','prev-t-interactMedia')">+ 新增媒體</button>
+        <div id="prev-t-interactMedia" class="img-multi-preview"></div>
+      </div>
+      <div class="form-group"><label>互動點說明文字</label><textarea id="t-interactText" class="form-control" rows="3"></textarea></div>
+      <div class="form-group"><label>外部連結</label><input type="text" id="t-interactLink" class="form-control" placeholder="https://..."></div>
+      <h3 class="section-title">💬 互動選項設定</h3>
+      <div id="t-interact-options-list"></div>
+      <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:#28a745" onclick="addInteractOption()">+ 新增互動選項</button>
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn-delete" onclick="deleteTrigger()">🗑️ 刪除此點</button>
+    <button class="btn-save" onclick="saveTrigger()">💾 儲存</button>
+  </div>
+</div></div>
+
+<!-- ============ 物件設定 ============ -->
+<div class="modal-backdrop" id="obj-modal"><div class="panel" style="width:520px">
+  <div class="panel-header"><h2>🧱 物件設定</h2><button class="btn-close" onclick="closeModal('obj-modal')">×</button></div>
+  <div class="panel-body">
+    <input type="hidden" id="o-id">
+    <div class="form-row">
+      <div class="form-group"><label>X 位置</label><input type="number" id="o-x" class="form-control"></div>
+      <div class="form-group"><label>Y 位置（深度）</label><input type="number" id="o-y" class="form-control"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>縮放</label><input type="number" id="o-scale" class="form-control" step="0.05" value="1"></div>
+      <div class="form-group"><label>樓層</label>
+        <select id="o-floor" class="form-control"><option value="0">下層</option><option value="1">上層</option></select>
+      </div>
+    </div>
+    <div class="form-group"><label><input type="checkbox" id="o-collide"> 可碰撞（阻擋移動、可站立於其上）</label></div>
+    <div id="o-custom-grp" style="display:none">
+      <div class="form-group"><label>自訂圖片網址</label><input type="text" id="o-img" class="form-control"></div>
+      <div class="form-row">
+        <div class="form-group"><label>顯示寬</label><input type="number" id="o-w" class="form-control"></div>
+        <div class="form-group"><label>顯示高</label><input type="number" id="o-h" class="form-control"></div>
+      </div>
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn-delete" onclick="deleteObject()">🗑️ 刪除物件</button>
+    <button class="btn-save" onclick="saveObject()">💾 儲存</button>
+  </div>
+</div></div>
+
+<!-- ============ 全域設定 ============ -->
+<div class="modal-backdrop" id="global-modal"><div class="panel">
+  <div class="panel-header"><h2>⚙️ 全域設定</h2><button class="btn-close" onclick="closeModal('global-modal')">×</button></div>
+  <div class="panel-body">
+    <div class="form-row">
+      <div class="form-group"><label>起始畫面背景圖網址</label>
+        <input type="text" id="g-startBg" class="form-control" oninput="updateSinglePreview(this,'prev-g-startBg')">
+        <img id="prev-g-startBg" class="img-preview-box">
+      </div>
+      <div class="form-group"><label>遊戲副標題</label><input type="text" id="g-subtitle" class="form-control" maxlength="15"></div>
+      <div class="form-group"><label>設計者 (選填，限10字)</label><input type="text" id="g-designer" class="form-control" maxlength="10" placeholder="例如：侯老師"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>🔑 遊戲通行碼 (選填)</label><input type="text" id="g-passcode" class="form-control"></div>
+      <div class="form-group"><label>主題顏色</label>
+        <select id="g-theme" class="form-control">
+          <option value="default">🔮 神秘紫 (預設版型)</option><option value="blue">🌐 科技藍</option>
+          <option value="green">🌲 森林綠</option><option value="red">🔥 熾熱紅</option>
+          <option value="dark">🌙 深色模式</option><option value="ink">🖌️ 宣紙墨韻</option>
+          <option value="mountain">⛰️ 黛青山水</option><option value="rouge">🌸 胭脂粉櫻</option>
+          <option value="morandi">🫧 莫蘭迪霧</option><option value="indigo">📜 靛青夜讀</option>
+          <option value="ocean">🌊 深海湛藍</option><option value="sunset">🌇 暮色霞橙</option>
+          <option value="sakuranight">🌃 夜櫻紫斕</option><option value="matcha">🍵 抹茶清雅</option>
+          <option value="amber">🟤 琥珀復古</option>
+        </select>
+      </div>
+      <div class="form-group"><label>彈出視窗風格</label>
+        <select id="g-popupStyle" class="form-control">
+          <option value="default">🪟 預設圓角面板</option><option value="thinline">📐 細框線簡約</option>
+          <option value="textbox">💬 對話文字方塊</option><option value="flash">✨ 細框閃動</option>
+          <option value="neon">🌟 霓虹光暈卡片</option>
+        </select>
+      </div>
+    </div>
+
+    <h3 class="section-title">🎵 音效設定</h3>
+    <div class="hint-note">背景音樂為「每個房間各自設定」。請於各房間的「📝 房間設定」中填入該房間的 BGM 網址。</div>
+    <div class="form-row">
+      <div class="form-group"><label>🎼 背景音樂起始音量</label>
+        <input type="range" id="g-bgmVolume" min="0" max="100" value="70" class="form-control" style="padding:0" oninput="document.getElementById('g-bgmVol-val').textContent=this.value+'%'">
+        <div style="font-size:.8em;color:#666"><span id="g-bgmVol-val">70%</span></div>
+      </div>
+      <div class="form-group"><label>🔔 音效起始音量</label>
+        <input type="range" id="g-sfxVolume" min="0" max="100" value="80" class="form-control" style="padding:0" oninput="document.getElementById('g-sfxVol-val').textContent=this.value+'%'">
+        <div style="font-size:.8em;color:#666"><span id="g-sfxVol-val">80%</span></div>
+      </div>
+    </div>
+
+    <h3 class="section-title">🗡️ 玩家武器與能量設定</h3>
+    <div class="form-row">
+      <div class="form-group"><label>武器類型</label>
+        <select id="g-weapon" class="form-control">
+          <option value="blaster">🔫 光束槍（可蓄力）</option>
+          <option value="rifle">🎯 連發步槍（射速快、傷害低）</option>
+          <option value="cannon">💥 重砲（傷害高、射速慢）</option>
+        </select>
+      </div>
+      <div class="form-group"><label>基礎傷害</label><input type="number" id="g-weaponDmg" class="form-control" value="20" min="1"></div>
+      <div class="form-group"><label>射擊冷卻(幀)</label><input type="number" id="g-weaponCd" class="form-control" value="14" min="3"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>玩家能量 (HP)</label><input type="number" id="g-playerHp" class="form-control" value="100" min="1"></div>
+      <div class="form-group"><label>玩家生命次數</label><input type="number" id="g-lives" class="form-control" value="3" min="1" max="9"></div>
+      <div class="form-group"><label>移動速度</label><input type="number" id="g-speed" class="form-control" value="4" min="1" step="0.5"></div>
+    </div>
+    <div class="hint-note">玩家能量歸零時扣一條生命並原地復活；生命用盡才 Game Over。機台強化會在此基礎上疊加。</div>
+
+    <h3 class="section-title">⏱️ 限制設定</h3>
+    <div class="form-row">
+      <div class="form-group" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="g-timeLimitEnabled" style="width:20px;height:20px" onchange="toggleTime()">
+        <label style="margin:0">啟用限時模式</label>
+      </div>
+      <div class="form-group" id="time-input-grp" style="display:none"><label>時間限制 (秒)</label><input type="number" id="g-timeLimit" class="form-control" value="300"></div>
+    </div>
+
+    <h3 class="section-title">🎒 背包系統與道具管理</h3>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="g-bpEnabled" style="width:20px;height:20px" onchange="toggleBackpackSettings()">
+      <label style="margin:0">啟用道具背包系統</label>
+    </div>
+    <div id="bp-settings-grp" style="display:none;background:#f8f9fa;padding:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:14px">
+      <label style="font-weight:bold;color:var(--primary);margin-bottom:9px;display:block">編輯遊戲內道具</label>
+      <div id="items-list-container"></div>
+      <button style="background:var(--secondary);color:#fff;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;font-weight:bold;margin-top:9px" onclick="addEditorItem()">+ 新增道具</button>
+    </div>
+
+    <h3 class="section-title">🌐 其他設定</h3>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="g-customTabEnabled" style="width:20px;height:20px" onchange="toggleCustomTab()">
+      <label style="margin:0">啟用自訂 iframe 頁籤</label>
+    </div>
+    <div class="form-row" id="custom-tab-grp" style="display:none;background:#f8f9fa;padding:14px;border-radius:8px;margin-bottom:14px">
+      <div class="form-group"><label>頁籤名稱</label><input type="text" id="g-ctName" class="form-control"></div>
+      <div class="form-group"><label>頁籤說明（最長50字）</label><input type="text" id="g-ctDesc" class="form-control" maxlength="50"></div>
+      <div class="form-group"><label>嵌入網址</label><input type="text" id="g-ctUrl" class="form-control"></div>
+    </div>
+    <div class="form-group"><label><input type="checkbox" id="g-blindSearch"> 🔦 盲搜模式：不顯示觸發點方向指引</label></div>
+    <div class="form-group"><label><input type="checkbox" id="g-forceLog"> 啟用強制允許匯出紀錄</label></div>
+  </div>
+  <div class="panel-footer"><button class="btn-save" onclick="saveGlobalSettings()">💾 儲存</button></div>
+</div></div>
+
+<!-- ============ 系統對話框 ============ -->
+<div class="modal-backdrop" id="sys-modal" style="z-index:99998"><div class="panel" style="width:360px;text-align:center">
+  <div class="panel-body">
+    <h3 id="sys-title" style="margin-top:0;color:var(--primary)">系統提示</h3>
+    <p id="sys-body" style="line-height:1.6;white-space:pre-wrap"></p>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
+      <button class="btn-delete" id="sys-cancel" style="display:none;background:#6c757d" onclick="closeModal('sys-modal')">取消</button>
+      <button class="btn-save" id="sys-ok">確定</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- ============ 試玩覆蓋 ============ -->
+<div id="preview-overlay">
+  <div id="preview-bar">
+    <b>▶️ 試玩模式</b>
+    <button class="tbtn" onclick="closePreview()">✖ 關閉試玩</button>
+  </div>
+  <iframe id="preview-frame"></iframe>
+</div>
+<script>
+/* ==================================================================
+   NTUSTMEG ACTGame Maker — 編輯器核心
+   架構移植自 NTUSTMEG Exploration GameMaker (SVVRMaker N7)
+   場景→房間、觸發點→觸發點(世界座標)、新增：物件庫/敵人/機台
+   ================================================================== */
+
+/* ---------- 常數（與遊戲執行期一致） ---------- */
+const VIEW_W=800, VIEW_H=450, ROOM_W=1600;
+const FLOOR_TOP=250, FLOOR_BOT=430, UPPER_RISE=300;
+
+/* ---------- 可用機台（8 台） ---------- */
+const MACHINES = {
+  optics:    {title:'光學校準模擬儀', src:'sim_optics.html',    kind:'damage',   topic:'Kc-Ⅳ 光的反射',        desc:'調整鏡片斜向，使光束反射抵達感測器。強化：砲彈傷害。'},
+  mechanics: {title:'斜面力學模擬儀', src:'sim_mechanics.html', kind:'speed',    topic:'Ee-Ⅳ 斜面與摩擦',      desc:'調整角度與摩擦，使滑塊飛越缺口抵達感測器。強化：移動速度。'},
+  circuit:   {title:'電路連接模擬儀', src:'sim_circuit.html',   kind:'firerate', topic:'Kb-Ⅳ 串聯迴路',        desc:'接通所有導線並閉合開關形成迴路。強化：射擊速度。'},
+  lever:     {title:'槓桿平衡模擬儀', src:'sim_lever.html',     kind:'defense',  topic:'Ee-Ⅳ 力矩',            desc:'調整右側砝碼質量與力臂使力矩平衡。強化：防禦減傷。'},
+  density:   {title:'密度浮沉模擬儀', src:'sim_density.html',   kind:'maxhp',    topic:'Bb-Ⅳ 密度與浮力',      desc:'調整質量與體積使方塊懸浮於液體。強化：最大生命。'},
+  ohms:      {title:'歐姆定律模擬儀', src:'sim_ohms.html',      kind:'shield',   topic:'Kb-Ⅳ 電流電壓電阻',    desc:'調整電壓與電阻達到目標電流。強化：護盾。'},
+  titration: {title:'酸鹼中和滴定台', src:'sim_titration.html', kind:'regen',    topic:'Jc-Ⅳ 酸鹼中和',        desc:'調整鹼濃度與體積使酸鹼恰好中和。強化：持續回復。'},
+  lens:      {title:'凸透鏡成像模擬儀',src:'sim_lens.html',     kind:'jump',     topic:'Kc-Ⅳ 透鏡成像',        desc:'調整物距與焦距使實像落在螢幕上。強化：跳躍力。'},
+};
+const KIND_LABEL={damage:'⚡傷害',speed:'▶速度',firerate:'⟳射速',defense:'🛡防禦',
+                  maxhp:'♥生命上限',shield:'◇護盾',regen:'✚回復',jump:'↑跳躍'};
+
+/* ---------- 內建物件圖庫（來自 props2.json） ---------- */
+let PROPS={}, propsImg=null, propsReady=false;
+
+/* ---------- 全域資料模型（對照 Exploration 的 gameData） ---------- */
+let gameData = newGameData();
+function newGameData(){
+  return {
+    gameName:"", startBgImg:"", startSubtitle:"", designer:"", blindSearch:false,
+    passcode:"", forceLogExport:false, themeColor:"default", popupStyle:"default",
+    bgmVolume:70, sfxVolume:80,
+    customTabEnabled:false, customTabName:"", customTabUrl:"", customTabDesc:"",
+    backpackEnabled:false, timeLimitEnabled:false, timeLimitSeconds:300,
+    // ACT 專屬：玩家武器與能量（取代 Exploration 的體力設定）
+    weapon:"blaster", weaponDmg:20, weaponCd:14, playerHp:100, lives:3, playerSpeed:4,
+    lang:"zh", items:[], rooms:{}
+  };
+}
+let currentRoomId=null, activeView='room', editMode='select', objSource='builtin';
+let selectedProp=null, addTrgPending=false;
+let selectedObj=null, draggingObj=null, draggingTrg=null, draggedNode=null;
+let currentTHints=[], currentInteractOptions=[], activeMediaArrays={};
+
+/* ---------- 儲存 ---------- */
+function autoSave(){ try{ localStorage.setItem('actmaker_data', JSON.stringify(gameData)); }catch(e){} }
+function autoLoad(){
+  try{ const s=localStorage.getItem('actmaker_data');
+    if(s){ gameData=JSON.parse(s); if(!gameData.rooms) gameData.rooms={}; return true; } }catch(e){}
+  return false;
+}
+
+/* ---------- 系統對話框 ---------- */
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function sysAlert(msg,cb){
+  document.getElementById('sys-title').textContent='系統提示';
+  document.getElementById('sys-body').textContent=msg;
+  document.getElementById('sys-cancel').style.display='none';
+  const ok=document.getElementById('sys-ok');
+  ok.onclick=()=>{closeModal('sys-modal'); if(cb)cb();};
+  openModal('sys-modal');
+}
+function sysConfirm(msg,cb){
+  document.getElementById('sys-title').textContent='請確認';
+  document.getElementById('sys-body').textContent=msg;
+  document.getElementById('sys-cancel').style.display='inline-block';
+  const ok=document.getElementById('sys-ok');
+  ok.onclick=()=>{closeModal('sys-modal'); if(cb)cb();};
+  openModal('sys-modal');
+}
+
+/* ================= 房間 CRUD ================= */
+function createNewRoom(){
+  const isFirst = Object.keys(gameData.rooms).length===0;
+  const id='room_'+Date.now();
+  gameData.rooms[id]={
+    id, name:'新房間 '+(Object.keys(gameData.rooms).length+1),
+    tall:false, bg:'#26202a', floor:'#3f3348', accent:'#8a5aaa', bgmUrl:'',
+    isStart:isFirst, isEnd:false, endCondition:'arrive',
+    preludeStory:'', preludeMedia:[], endStory:'', endMedia:[],
+    objects:[], triggers:[],
+    enemyCount:2, enemyHp:60, enemyAtk:10,
+    uiX:60+Math.random()*80, uiY:60+Math.random()*80
+  };
+  autoSave(); renderRoomList(); selectRoom(id);
+}
+function selectRoom(id){
+  currentRoomId=id; selectedObj=null;
+  renderRoomList(); redrawStage(); updateStageInfo();
+}
+function renderRoomList(){
+  const box=document.getElementById('room-list'); box.innerHTML='';
+  Object.values(gameData.rooms).forEach(r=>{
+    const d=document.createElement('div');
+    d.className='scene-item'+(r.id===currentRoomId?' active':'');
+    const nMac=r.triggers.filter(t=>t.type==='machine').length;
+    let badges=`<span class="sb">🧱 ${r.objects.length}</span><span class="sb">🎯 ${r.triggers.length}</span><span class="sb">👾 ${r.enemyCount}</span>`;
+    if(r.tall) badges+='<span class="sb">🏢 樓中樓</span>';
+    if(nMac) badges+=`<span class="sb mac">⚗️ ${nMac}</span>`;
+    if(r.isStart) badges+='<span class="sb start">起始</span>';
+    if(r.isEnd) badges+='<span class="sb end">結局</span>';
+    d.innerHTML=`<h4>${r.name}</h4><div class="scene-badges">${badges}</div>`;
+    d.onclick=()=>selectRoom(r.id);
+    d.draggable=true;
+    d.ondragstart=e=>{e.dataTransfer.setData('text/plain',r.id);};
+    d.ondragover=e=>e.preventDefault();
+    d.ondrop=e=>{e.preventDefault();reorderRooms(e.dataTransfer.getData('text/plain'),r.id);};
+    box.appendChild(d);
+  });
+}
+function reorderRooms(dragId,targetId){
+  if(dragId===targetId) return;
+  const ent=Object.entries(gameData.rooms);
+  const di=ent.findIndex(e=>e[0]===dragId);
+  if(di<0) return;
+  const [de]=ent.splice(di,1);
+  const ti=ent.findIndex(e=>e[0]===targetId);
+  ent.splice(ti<0?ent.length:ti,0,de);
+  const nr={}; ent.forEach(([k,v])=>nr[k]=v);
+  gameData.rooms=nr; autoSave(); renderRoomList();
+}
+function openRoomSettings(){
+  if(!currentRoomId) return sysAlert('請先選擇或新增一個房間。');
+  const r=gameData.rooms[currentRoomId];
+  document.getElementById('r-id').value=r.id;
+  document.getElementById('r-name').value=r.name;
+  document.getElementById('r-tall').value=r.tall?'1':'0';
+  document.getElementById('r-bg').value=r.bg;
+  document.getElementById('r-floor').value=r.floor;
+  document.getElementById('r-accent').value=r.accent;
+  document.getElementById('r-bgm').value=r.bgmUrl||'';
+  document.getElementById('r-enemyCount').value=r.enemyCount;
+  document.getElementById('r-enemyHp').value=r.enemyHp;
+  document.getElementById('r-enemyAtk').value=r.enemyAtk;
+  document.getElementById('r-endCondition').value=r.endCondition||'arrive';
+  initMediaList('list-r-preMedia',r.preludeMedia,'prev-r-preMedia');
+  document.getElementById('r-preStory').value=r.preludeStory||'';
+  initMediaList('list-r-endMedia',r.endMedia,'prev-r-endMedia');
+  document.getElementById('r-endStory').value=r.endStory||'';
+  document.getElementById(r.isStart?'r-isStart':(r.isEnd?'r-isEnd':'r-isNormal')).checked=true;
+  document.getElementById('r-tall-note').style.display=r.tall?'block':'none';
+  document.getElementById('r-tall').onchange=e=>{
+    document.getElementById('r-tall-note').style.display=e.target.value==='1'?'block':'none';};
+  toggleEndForm(); openModal('room-modal');
+}
+function toggleEndForm(){
+  document.getElementById('r-end-grp').style.display=document.getElementById('r-isEnd').checked?'block':'none';
+}
+function saveRoomSettings(){
+  const r=gameData.rooms[currentRoomId];
+  r.name=document.getElementById('r-name').value;
+  r.tall=document.getElementById('r-tall').value==='1';
+  r.bg=document.getElementById('r-bg').value;
+  r.floor=document.getElementById('r-floor').value;
+  r.accent=document.getElementById('r-accent').value;
+  r.bgmUrl=document.getElementById('r-bgm').value;
+  r.enemyCount=parseInt(document.getElementById('r-enemyCount').value)||0;
+  r.enemyHp=parseInt(document.getElementById('r-enemyHp').value)||60;
+  r.enemyAtk=parseInt(document.getElementById('r-enemyAtk').value)||10;
+  r.preludeMedia=(activeMediaArrays['list-r-preMedia']||[]).filter(x=>x.trim()!=='');
+  r.preludeStory=document.getElementById('r-preStory').value;
+  r.endMedia=(activeMediaArrays['list-r-endMedia']||[]).filter(x=>x.trim()!=='');
+  r.endStory=document.getElementById('r-endStory').value;
+  r.endCondition=document.getElementById('r-endCondition').value||'arrive';
+  const wasStart=r.isStart;
+  r.isStart=document.getElementById('r-isStart').checked;
+  r.isEnd=document.getElementById('r-isEnd').checked;
+  if(r.isStart&&!wasStart) Object.values(gameData.rooms).forEach(x=>{if(x.id!==r.id)x.isStart=false;});
+  if(!r.tall){ r.objects.forEach(o=>o.floor=0); r.triggers.forEach(t=>t.floor=0); }
+  autoSave(); renderRoomList(); redrawStage(); closeModal('room-modal');
+}
+function deleteCurrentRoom(){
+  sysConfirm('確定刪除此房間？',()=>{
+    delete gameData.rooms[currentRoomId];
+    // 清除指向此房間的穿越點
+    Object.values(gameData.rooms).forEach(r=>{
+      r.triggers=r.triggers.filter(t=>t.type!=='portal'||t.targetRoomId!==currentRoomId);});
+    currentRoomId=null; autoSave(); renderRoomList(); closeModal('room-modal');
+    const ks=Object.keys(gameData.rooms);
+    if(ks.length) selectRoom(ks[0]); else redrawStage();
+  });
+}
+
+/* ================= 物件庫 ================= */
+function setObjSource(s){
+  objSource=s;
+  document.getElementById('src-builtin').classList.toggle('on',s==='builtin');
+  document.getElementById('src-custom').classList.toggle('on',s==='custom');
+  document.getElementById('custom-obj-grp').style.display=s==='custom'?'block':'none';
+  document.getElementById('obj-lib').style.display=s==='builtin'?'block':'none';
+}
+function renderLibGrid(){
+  const g=document.getElementById('lib-grid'); g.innerHTML='';
+  if(!propsReady) { g.innerHTML='<div style="grid-column:1/-1;color:#888;font-size:.75em;padding:10px">圖庫載入中…</div>'; return; }
+  Object.entries(PROPS).forEach(([name,p])=>{
+    const cell=document.createElement('div');
+    cell.className='lib-cell'+(selectedProp===name?' on':'');
+    const cv=document.createElement('canvas'); cv.width=64; cv.height=42;
+    const cx=cv.getContext('2d'); cx.imageSmoothingEnabled=false;
+    const sc=Math.min(64/p.w, 42/p.h);
+    const dw=p.w*sc, dh=p.h*sc;
+    cx.drawImage(propsImg,p.x,p.y,p.w,p.h,(64-dw)/2,(42-dh)/2,dw,dh);
+    cell.appendChild(cv);
+    const sp=document.createElement('span'); sp.textContent=name; cell.appendChild(sp);
+    cell.onclick=()=>{ selectedProp=name; setMode('object'); renderLibGrid(); };
+    g.appendChild(cell);
+  });
+}
+function setMode(m){
+  editMode=m;
+  ['select','object','trigger','erase'].forEach(k=>
+    document.getElementById('m-'+k).classList.toggle('on',k===m));
+  const hint=document.getElementById('stage-hint');
+  if(m==='object'){ hint.textContent = selectedProp||objSource==='custom' ? '點擊畫面放置物件' : '請先在物件庫選一個物件'; hint.style.display='block'; }
+  else if(m==='trigger'){ hint.textContent='點擊畫面放置觸發點'; hint.style.display='block'; }
+  else if(m==='erase'){ hint.textContent='點擊物件或觸發點以刪除'; hint.style.display='block'; }
+  else hint.style.display='none';
+  document.getElementById('stage').style.cursor = m==='select'?'default':'crosshair';
+}
+
+/* ================= 舞台繪製 ================= */
+const stage=document.getElementById('stage');
+const sctx=stage.getContext('2d');
+let stageScale=1, stageOffX=0, stageOffY=0;
+
+function resizeStage(){
+  const w=document.getElementById('stage-wrap');
+  stage.width=w.clientWidth; stage.height=w.clientHeight;
+  // 以能完整顯示 ROOM_W × (VIEW_H+UPPER_RISE) 為原則
+  const needH = VIEW_H + UPPER_RISE;
+  stageScale=Math.min(stage.width/ROOM_W, stage.height/needH)*0.94;
+  stageOffX=(stage.width-ROOM_W*stageScale)/2;
+  stageOffY=(stage.height-needH*stageScale)/2;
+  redrawStage();
+}
+window.addEventListener('resize',resizeStage);
+function w2s(x,y){ return {x:stageOffX+x*stageScale, y:stageOffY+(y+UPPER_RISE)*stageScale}; }
+function s2w(sx,sy){ return {x:(sx-stageOffX)/stageScale, y:(sy-stageOffY)/stageScale-UPPER_RISE}; }
+function editingUpper(){ return document.getElementById('chk-upper').checked; }
+
+function redrawStage(){
+  sctx.setTransform(1,0,0,1,0,0);
+  sctx.fillStyle='#1b2430'; sctx.fillRect(0,0,stage.width,stage.height);
+  if(!currentRoomId||!gameData.rooms[currentRoomId]){
+    sctx.fillStyle='#5b6b7d'; sctx.font='15px sans-serif'; sctx.textAlign='center';
+    sctx.fillText('請先於左側「＋ 新增房間」建立房間', stage.width/2, stage.height/2);
+    sctx.textAlign='left'; return;
+  }
+  const r=gameData.rooms[currentRoomId];
+  sctx.save(); sctx.imageSmoothingEnabled=false;
+
+  const drawFloorBand=(off,label)=>{
+    const a=w2s(0,FLOOR_TOP-off), b=w2s(ROOM_W,FLOOR_BOT-off);
+    sctx.fillStyle=r.bg; sctx.fillRect(a.x,w2s(0,-off-140).y,(b.x-a.x),(a.y-w2s(0,-off-140).y));
+    sctx.fillStyle=r.floor; sctx.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);
+    sctx.strokeStyle=r.accent; sctx.lineWidth=2; sctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);
+    sctx.fillStyle='rgba(255,255,255,.35)'; sctx.font=`${12}px sans-serif`;
+    sctx.fillText(label,a.x+6,a.y-6);
+  };
+  if(r.tall) drawFloorBand(UPPER_RISE,'上層');
+  drawFloorBand(0,'下層');
+
+  // 物件（依樓層與 y 排序）
+  const objs=[...r.objects].sort((a,b)=>(a.floor-b.floor)||(a.y-b.y));
+  objs.forEach(o=>drawObject(o, o.id===selectedObj));
+  // 觸發點
+  r.triggers.forEach(t=>drawTrigger(t));
+
+  sctx.restore();
+}
+function drawObject(o, sel){
+  const off = o.floor? UPPER_RISE : 0;
+  const p = w2s(o.x, o.y-off);
+  const dim = objDim(o);
+  const dw=dim.w*o.scale*stageScale, dh=dim.h*o.scale*stageScale;
+  const dx=p.x-dw/2, dy=p.y-dh;
+  const dimAlpha = (r=>{ const up=editingUpper(); return (o.floor===1)===up ? 1 : 0.35; })();
+  sctx.globalAlpha=dimAlpha;
+  if(o.src==='builtin'&&propsReady&&PROPS[o.prop]){
+    const pr=PROPS[o.prop];
+    sctx.drawImage(propsImg,pr.x,pr.y,pr.w,pr.h,dx,dy,dw,dh);
+  } else if(o.src==='custom'&&o._img&&o._img.complete){
+    sctx.drawImage(o._img,dx,dy,dw,dh);
+  } else {
+    sctx.fillStyle='#4a5568'; sctx.fillRect(dx,dy,dw,dh);
+    sctx.fillStyle='#a0aec0'; sctx.font='10px sans-serif'; sctx.textAlign='center';
+    sctx.fillText(o.prop||'物件', p.x, p.y-dh/2); sctx.textAlign='left';
+  }
+  if(o.collide){ sctx.strokeStyle='rgba(32,201,151,.75)'; sctx.lineWidth=1.5; sctx.strokeRect(dx,dy,dw,dh); }
+  if(sel){ sctx.strokeStyle='#ffd43b'; sctx.lineWidth=2.5; sctx.strokeRect(dx-2,dy-2,dw+4,dh+4); }
+  sctx.globalAlpha=1;
+}
+function objDim(o){
+  if(o.src==='builtin'&&PROPS[o.prop]) return {w:PROPS[o.prop].w,h:PROPS[o.prop].h};
+  return {w:o.w||120,h:o.h||120};
+}
+const TRG_ICON={portal:'⬆️',info:'ℹ️',embed:'🔗',check:'❓',interact:'💬',machine:'⚗️'};
+const TRG_COLOR={portal:'#4dabf7',info:'#69db7c',embed:'#ffd43b',check:'#ff922b',interact:'#da77f2',machine:'#9775fa'};
+function drawTrigger(t){
+  const off=t.floor?UPPER_RISE:0;
+  const p=w2s(t.x, t.y-off);
+  const up=editingUpper();
+  sctx.globalAlpha=((t.floor===1)===up)?1:0.35;
+  // 觸發範圍
+  sctx.beginPath(); sctx.arc(p.x,p.y,(t.radius||70)*stageScale,0,Math.PI*2);
+  sctx.fillStyle=TRG_COLOR[t.type]+'22'; sctx.fill();
+  sctx.strokeStyle=TRG_COLOR[t.type]; sctx.lineWidth=1.5; sctx.setLineDash([5,4]); sctx.stroke(); sctx.setLineDash([]);
+  // 標記
+  sctx.beginPath(); sctx.arc(p.x,p.y,13,0,Math.PI*2);
+  sctx.fillStyle=TRG_COLOR[t.type]; sctx.fill();
+  sctx.strokeStyle='#fff'; sctx.lineWidth=2; sctx.stroke();
+  sctx.font='13px sans-serif'; sctx.textAlign='center'; sctx.textBaseline='middle';
+  sctx.fillText(TRG_ICON[t.type],p.x,p.y+1);
+  sctx.textBaseline='alphabetic';
+  sctx.fillStyle='rgba(0,0,0,.65)';
+  const lw=sctx.measureText(t.title).width+10;
+  sctx.fillRect(p.x-lw/2,p.y+16,lw,15);
+  sctx.fillStyle='#fff'; sctx.font='10px sans-serif';
+  sctx.fillText(t.title,p.x,p.y+27);
+  sctx.textAlign='left'; sctx.globalAlpha=1;
+}
+function updateStageInfo(){
+  const el=document.getElementById('stage-info');
+  if(!currentRoomId){el.textContent='';return;}
+  const r=gameData.rooms[currentRoomId];
+  el.innerHTML=`房間：<b>${r.name}</b>　物件 ${r.objects.length}　觸發點 ${r.triggers.length}　敵人 ${r.enemyCount}（HP ${r.enemyHp}）<br>
+    房間寬 ${ROOM_W}px　地板 y ${FLOOR_TOP}~${FLOOR_BOT}${r.tall?'　上層偏移 '+UPPER_RISE:''}`;
+}
+
+/* ---------- 舞台互動 ---------- */
+stage.addEventListener('mousedown',e=>{
+  if(!currentRoomId) return;
+  const rect=stage.getBoundingClientRect();
+  const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+  const w=s2w(sx,sy);
+  const up=editingUpper();
+  const wy = up ? w.y+UPPER_RISE : w.y;
+  const r=gameData.rooms[currentRoomId];
+
+  if(editMode==='object'){ placeObject(w.x, wy, up?1:0); return; }
+  if(editMode==='trigger'){ placeTrigger(w.x, wy, up?1:0); return; }
+
+  // 命中測試（先觸發點後物件）
+  const hitT = r.triggers.slice().reverse().find(t=>{
+    if((t.floor===1)!==up) return false;
+    const p=w2s(t.x,t.y-(t.floor?UPPER_RISE:0));
+    return Math.hypot(sx-p.x,sy-p.y)<15;
+  });
+  const hitO = !hitT && r.objects.slice().reverse().find(o=>{
+    if((o.floor===1)!==up) return false;
+    const off=o.floor?UPPER_RISE:0, p=w2s(o.x,o.y-off), d=objDim(o);
+    const dw=d.w*o.scale*stageScale, dh=d.h*o.scale*stageScale;
+    return sx>=p.x-dw/2&&sx<=p.x+dw/2&&sy>=p.y-dh&&sy<=p.y;
+  });
+
+  if(editMode==='erase'){
+    if(hitT){ r.triggers=r.triggers.filter(x=>x.id!==hitT.id); }
+    else if(hitO){ r.objects=r.objects.filter(x=>x.id!==hitO.id); }
+    autoSave(); renderRoomList(); redrawStage(); updateStageInfo(); return;
+  }
+  if(editMode==='select'){
+    if(hitT){ draggingTrg={t:hitT}; return; }
+    if(hitO){ selectedObj=hitO.id; draggingObj={o:hitO}; redrawStage(); return; }
+    selectedObj=null; redrawStage();
+  }
+});
+stage.addEventListener('mousemove',e=>{
+  if(!draggingObj&&!draggingTrg) return;
+  const rect=stage.getBoundingClientRect();
+  const w=s2w(e.clientX-rect.left, e.clientY-rect.top);
+  const up=editingUpper(); const wy=up?w.y+UPPER_RISE:w.y;
+  const tgt=draggingObj?draggingObj.o:draggingTrg.t;
+  tgt.x=Math.max(20,Math.min(ROOM_W-20,Math.round(w.x)));
+  tgt.y=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,Math.round(up?wy-UPPER_RISE+UPPER_RISE:wy)));
+  if(up) tgt.y=Math.max(FLOOR_TOP+UPPER_RISE,Math.min(FLOOR_BOT+UPPER_RISE,Math.round(wy)));
+  redrawStage();
+});
+window.addEventListener('mouseup',()=>{
+  if(draggingObj||draggingTrg){ autoSave(); }
+  draggingObj=null; draggingTrg=null;
+});
+stage.addEventListener('dblclick',e=>{
+  if(!currentRoomId) return;
+  const rect=stage.getBoundingClientRect();
+  const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+  const up=editingUpper(); const r=gameData.rooms[currentRoomId];
+  const hitT=r.triggers.slice().reverse().find(t=>{
+    if((t.floor===1)!==up) return false;
+    const p=w2s(t.x,t.y-(t.floor?UPPER_RISE:0));
+    return Math.hypot(sx-p.x,sy-p.y)<15;});
+  if(hitT) return editTrigger(hitT.id);
+  const hitO=r.objects.slice().reverse().find(o=>{
+    if((o.floor===1)!==up) return false;
+    const off=o.floor?UPPER_RISE:0,p=w2s(o.x,o.y-off),d=objDim(o);
+    const dw=d.w*o.scale*stageScale,dh=d.h*o.scale*stageScale;
+    return sx>=p.x-dw/2&&sx<=p.x+dw/2&&sy>=p.y-dh&&sy<=p.y;});
+  if(hitO) editObject(hitO.id);
+});
+
+/* ================= 物件 CRUD ================= */
+function placeObject(x,y,floor){
+  const r=gameData.rooms[currentRoomId];
+  if(floor===1&&!r.tall) return sysAlert('此房間不是樓中樓，請先在房間設定改為樓中樓。');
+  const yy=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,y-(floor?UPPER_RISE:0)))+(floor?UPPER_RISE:0);
+  let o;
+  if(objSource==='custom'){
+    const url=document.getElementById('custom-obj-url').value.trim();
+    if(!url) return sysAlert('請先填入自訂圖片網址。');
+    o={id:'obj_'+Date.now(),src:'custom',img:url,
+       w:parseInt(document.getElementById('custom-obj-w').value)||120,
+       h:parseInt(document.getElementById('custom-obj-h').value)||120,
+       collide:document.getElementById('custom-obj-collide').checked,
+       x:Math.round(x),y:Math.round(yy),scale:1,floor};
+    o._img=new Image(); o._img.crossOrigin='anonymous'; o._img.onload=redrawStage; o._img.src=url;
+  } else {
+    if(!selectedProp) return sysAlert('請先在物件庫點選一個物件。');
+    const pr=PROPS[selectedProp];
+    o={id:'obj_'+Date.now(),src:'builtin',prop:selectedProp,
+       collide:!!pr.collide,x:Math.round(x),y:Math.round(yy),scale:1,floor};
+  }
+  r.objects.push(o); autoSave(); renderRoomList(); redrawStage(); updateStageInfo();
+}
+function editObject(id){
+  const r=gameData.rooms[currentRoomId];
+  const o=r.objects.find(x=>x.id===id); if(!o) return;
+  selectedObj=id;
+  document.getElementById('o-id').value=o.id;
+  document.getElementById('o-x').value=o.x;
+  document.getElementById('o-y').value=o.y;
+  document.getElementById('o-scale').value=o.scale;
+  document.getElementById('o-floor').value=o.floor?'1':'0';
+  document.getElementById('o-collide').checked=!!o.collide;
+  const cg=document.getElementById('o-custom-grp');
+  cg.style.display=o.src==='custom'?'block':'none';
+  if(o.src==='custom'){
+    document.getElementById('o-img').value=o.img||'';
+    document.getElementById('o-w').value=o.w; document.getElementById('o-h').value=o.h;
+  }
+  openModal('obj-modal');
+}
+function saveObject(){
+  const r=gameData.rooms[currentRoomId];
+  const o=r.objects.find(x=>x.id===document.getElementById('o-id').value); if(!o) return;
+  o.x=parseInt(document.getElementById('o-x').value)||o.x;
+  o.y=parseInt(document.getElementById('o-y').value)||o.y;
+  o.scale=parseFloat(document.getElementById('o-scale').value)||1;
+  const nf=document.getElementById('o-floor').value==='1'?1:0;
+  if(nf===1&&!r.tall){ sysAlert('此房間不是樓中樓。'); } else o.floor=nf;
+  o.collide=document.getElementById('o-collide').checked;
+  if(o.src==='custom'){
+    const nu=document.getElementById('o-img').value.trim();
+    if(nu!==o.img){ o.img=nu; o._img=new Image(); o._img.crossOrigin='anonymous'; o._img.onload=redrawStage; o._img.src=nu; }
+    o.w=parseInt(document.getElementById('o-w').value)||o.w;
+    o.h=parseInt(document.getElementById('o-h').value)||o.h;
+  }
+  autoSave(); redrawStage(); closeModal('obj-modal');
+}
+function deleteObject(){
+  const r=gameData.rooms[currentRoomId];
+  r.objects=r.objects.filter(x=>x.id!==document.getElementById('o-id').value);
+  selectedObj=null; autoSave(); renderRoomList(); redrawStage(); updateStageInfo(); closeModal('obj-modal');
+}
+
+/* ================= 觸發點 CRUD（比照 Exploration hotspot） ================= */
+function placeTrigger(x,y,floor){
+  const r=gameData.rooms[currentRoomId];
+  if(floor===1&&!r.tall) return sysAlert('此房間不是樓中樓。');
+  const type=document.getElementById('trg-type').value;
+  const yy=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,y-(floor?UPPER_RISE:0)))+(floor?UPPER_RISE:0);
+  const pref={portal:'穿越',info:'資訊',embed:'嵌入',check:'檢驗',interact:'互動',machine:'機台'}[type];
+  const t={
+    id:'trg_'+Date.now(), type, title:'新'+pref+'點',
+    x:Math.round(x), y:Math.round(yy), floor, radius:70,
+    requires:[], media:[], text:'', link:'', url:'',
+    targetRoomId:'', transition:'none',
+    question:'', answerType:'exact', answer:'', score:1, hints:[],
+    feedbackMedia:[], feedbackText:'', jumpToEnding:false, rewardItemId:'',
+    options:[], machineId:'optics', machineMax:2
+  };
+  r.triggers.push(t); autoSave(); renderRoomList(); redrawStage(); updateStageInfo(); editTrigger(t.id);
+}
+function editTrigger(id){
+  const r=gameData.rooms[currentRoomId];
+  const t=r.triggers.find(x=>x.id===id); if(!t) return;
+  document.getElementById('t-id').value=t.id;
+  document.getElementById('t-type').value=t.type;
+  document.getElementById('t-title').value=t.title;
+  document.getElementById('t-radius').value=t.radius||70;
+  ['portal','info','embed','check','interact','machine'].forEach(k=>
+    document.getElementById('t-'+k+'-grp').style.display='none');
+  document.getElementById('t-'+t.type+'-grp').style.display='block';
+  document.getElementById('trg-modal-title').textContent=
+    {portal:'⬆️ 穿越點',info:'ℹ️ 資訊點',embed:'🔗 嵌入點',check:'❓ 檢驗點',
+     interact:'💬 互動點',machine:'⚗️ 機台觸發點'}[t.type]+' 設定';
+
+  // 前提條件（移植自 Exploration：抵達房間 / 看過資訊 / 解開檢驗 / 完成互動）
+  const cd=document.getElementById('t-conditions');
+  const reqs=t.requires||[];
+  const isChk=(pre,id)=>reqs.includes(pre+':'+id)||(pre==='hs'&&reqs.includes(id));
+  let h='';
+  Object.values(gameData.rooms).forEach(rm=>{
+    h+=`<label style="display:block;font-weight:bold;color:var(--primary);margin-top:8px">
+      <input type="checkbox" value="room:${rm.id}" class="cond-cb" ${isChk('room',rm.id)?'checked':''}> 🏠 [抵達房間] ${rm.name}</label>`;
+    rm.triggers.forEach(x=>{
+      if(x.id===t.id) return;
+      if(['info','check','interact','machine'].includes(x.type)){
+        const lbl={info:'看過資訊',check:'解開檢驗',interact:'完成互動',machine:'完成機台'}[x.type];
+        h+=`<label style="display:block;margin-left:22px;font-size:.88em">
+          <input type="checkbox" value="hs:${x.id}" class="cond-cb" ${isChk('hs',x.id)?'checked':''}> 🔸 [${lbl}] ${x.title}</label>`;
+      }
+    });
+  });
+  cd.innerHTML=h||'<span style="color:#888">無其他項目可作為條件</span>';
+  document.querySelectorAll('.t-reward-grp').forEach(el=>el.style.display=gameData.backpackEnabled?'block':'none');
+
+  if(t.type==='portal'){
+    const sel=document.getElementById('t-targetRoom');
+    sel.innerHTML='<option value="">-- 請選擇 --</option>';
+    Object.values(gameData.rooms).forEach(rm=>{ if(rm.id!==currentRoomId)
+      sel.innerHTML+=`<option value="${rm.id}" ${t.targetRoomId===rm.id?'selected':''}>${rm.name}</option>`;});
+    document.getElementById('t-transition').value=t.transition||'none';
+  } else if(t.type==='info'){
+    initMediaList('list-t-infoMedia',t.media,'prev-t-infoMedia');
+    document.getElementById('t-infoText').value=t.text||'';
+    document.getElementById('t-infoLink').value=t.link||'';
+    document.getElementById('t-infoReward').innerHTML=getRewardOptionsHTML(t.rewardItemId);
+  } else if(t.type==='embed'){
+    document.getElementById('t-embedUrl').value=t.url||'';
+  } else if(t.type==='machine'){
+    const sel=document.getElementById('t-machineId'); sel.innerHTML='';
+    Object.entries(MACHINES).forEach(([k,m])=>
+      sel.innerHTML+=`<option value="${k}" ${t.machineId===k?'selected':''}>${m.title}（${m.topic}）</option>`);
+    document.getElementById('t-machineMax').value=t.machineMax||2;
+    onMachinePick(); closeMachinePreview();
+  } else if(t.type==='check'){
+    initMediaList('list-t-checkMedia',t.media,'prev-t-checkMedia');
+    initMediaList('list-t-checkFbMedia',t.feedbackMedia,'prev-t-checkFbMedia');
+    document.getElementById('t-checkFbText').value=t.feedbackText||'';
+    document.getElementById('t-checkQ').value=t.question||'';
+    document.getElementById('t-checkType').value=t.answerType||'exact';
+    document.getElementById('t-checkAns').value=t.answer||'';
+    document.getElementById('t-checkScore').value=t.score||1;
+    currentTHints=JSON.parse(JSON.stringify(t.hints||[]));
+    renderTHints();
+    document.getElementById('t-checkReward').innerHTML=getRewardOptionsHTML(t.rewardItemId);
+    const rm=gameData.rooms[currentRoomId];
+    document.getElementById('t-checkJumpEnd-grp').style.display=(rm.isEnd&&rm.endCondition==='trigger')?'block':'none';
+    document.getElementById('t-checkJumpEnd').checked=!!t.jumpToEnding;
+  } else if(t.type==='interact'){
+    initMediaList('list-t-interactMedia',t.media,'prev-t-interactMedia');
+    document.getElementById('t-interactText').value=t.text||'';
+    document.getElementById('t-interactLink').value=t.link||'';
+    currentInteractOptions=JSON.parse(JSON.stringify(t.options||[]));
+    renderInteractOptions();
+  }
+  openModal('trg-modal');
+}
+function saveTrigger(){
+  const r=gameData.rooms[currentRoomId];
+  const t=r.triggers.find(x=>x.id===document.getElementById('t-id').value); if(!t) return;
+  t.title=document.getElementById('t-title').value;
+  t.radius=parseInt(document.getElementById('t-radius').value)||70;
+  t.requires=Array.from(document.querySelectorAll('.cond-cb:checked')).map(cb=>cb.value);
+  const ty=t.type;
+  if(ty==='portal'){
+    t.targetRoomId=document.getElementById('t-targetRoom').value;
+    t.transition=document.getElementById('t-transition').value;
+  } else if(ty==='info'){
+    t.media=(activeMediaArrays['list-t-infoMedia']||[]).filter(x=>x.trim()!=='');
+    t.text=document.getElementById('t-infoText').value;
+    t.link=document.getElementById('t-infoLink').value;
+    t.rewardItemId=document.getElementById('t-infoReward').value;
+  } else if(ty==='embed'){
+    t.url=document.getElementById('t-embedUrl').value;
+  } else if(ty==='machine'){
+    t.machineId=document.getElementById('t-machineId').value;
+    t.machineMax=parseInt(document.getElementById('t-machineMax').value)||2;
+  } else if(ty==='check'){
+    t.media=(activeMediaArrays['list-t-checkMedia']||[]).filter(x=>x.trim()!=='');
+    t.feedbackMedia=(activeMediaArrays['list-t-checkFbMedia']||[]).filter(x=>x.trim()!=='');
+    t.feedbackText=document.getElementById('t-checkFbText').value;
+    t.question=document.getElementById('t-checkQ').value;
+    t.answerType=document.getElementById('t-checkType').value;
+    t.answer=document.getElementById('t-checkAns').value;
+    t.score=parseInt(document.getElementById('t-checkScore').value)||1;
+    syncTHintsMedia(); t.hints=JSON.parse(JSON.stringify(currentTHints));
+    t.rewardItemId=document.getElementById('t-checkReward').value;
+    const rm=gameData.rooms[currentRoomId];
+    t.jumpToEnding=(rm.isEnd&&rm.endCondition==='trigger')?document.getElementById('t-checkJumpEnd').checked:false;
+  } else if(ty==='interact'){
+    t.media=(activeMediaArrays['list-t-interactMedia']||[]).filter(x=>x.trim()!=='');
+    t.text=document.getElementById('t-interactText').value;
+    t.link=document.getElementById('t-interactLink').value;
+    t.options=JSON.parse(JSON.stringify(currentInteractOptions));
+  }
+  autoSave(); renderRoomList(); redrawStage(); drawFlowchart(); closeModal('trg-modal');
+}
+function deleteTrigger(){
+  sysConfirm('確定刪除此觸發點？',()=>{
+    const r=gameData.rooms[currentRoomId];
+    r.triggers=r.triggers.filter(x=>x.id!==document.getElementById('t-id').value);
+    autoSave(); renderRoomList(); redrawStage(); drawFlowchart(); closeModal('trg-modal');
+  });
+}
+/* 機台預覽 */
+function onMachinePick(){
+  const k=document.getElementById('t-machineId').value, m=MACHINES[k];
+  document.getElementById('t-machine-desc').innerHTML=
+    `<b>${m.title}</b>（${m.topic}）<br>${m.desc}<br>強化效果：<span class="chip">${KIND_LABEL[m.kind]}</span>
+     <br><span style="color:#888">檔案：${m.src}（匯出 ZIP 會一併打包）</span>`;
+}
+function previewMachine(){
+  const k=document.getElementById('t-machineId').value, m=MACHINES[k];
+  document.getElementById('machine-preview-title').textContent='預覽：'+m.title;
+  document.getElementById('machine-preview-frame').src=m.src;
+  document.getElementById('machine-preview-wrap').style.display='block';
+}
+function closeMachinePreview(){
+  document.getElementById('machine-preview-wrap').style.display='none';
+  document.getElementById('machine-preview-frame').src='';
+}
+
+/* ================= 提示 / 互動選項（移植） ================= */
+function syncTHintsMedia(){ currentTHints.forEach((h,i)=>{const c='t_hint_media_'+i; if(activeMediaArrays[c]) h.media=[...activeMediaArrays[c]];}); }
+function addTHint(){ syncTHintsMedia(); currentTHints.push({type:'time',time:0,reqItemId:'',text:'',media:[]}); renderTHints(); }
+function removeTHint(i){ syncTHintsMedia(); currentTHints.splice(i,1); renderTHints(); }
+function updateTHint(i,k,v){ syncTHintsMedia(); currentTHints[i][k]=v; renderTHints(); }
+function renderTHints(){
+  const box=document.getElementById('t-hints-list'); box.innerHTML='';
+  currentTHints.forEach((h,i)=>{
+    let io='<option value="">--請選擇--</option>';
+    gameData.items.forEach(it=>io+=`<option value="${it.id}" ${h.reqItemId===it.id?'selected':''}>${it.name}</option>`);
+    const cid='t_hint_media_'+i; activeMediaArrays[cid]=h.media||[];
+    box.innerHTML+=`<div style="border:1px solid #ccc;padding:13px;margin-bottom:12px;border-radius:8px;background:#fff">
+      <div style="display:flex;justify-content:space-between;margin-bottom:9px;border-bottom:1px solid #eee;padding-bottom:8px">
+        <strong style="color:var(--primary)">💡 提示 ${i+1}</strong>
+        <button class="btn-delete" style="padding:4px 10px;font-size:.8em" onclick="removeTHint(${i})">刪除</button></div>
+      <div class="form-row">
+        <div class="form-group"><label>解鎖方式</label>
+          <select class="form-control" onchange="updateTHint(${i},'type',this.value)">
+            <option value="time" ${h.type==='time'?'selected':''}>時間倒數</option>
+            <option value="item" ${h.type==='item'?'selected':''}>特定道具換取</option></select></div>
+        ${h.type==='time'
+          ?`<div class="form-group"><label>等待秒數</label><input type="number" class="form-control" value="${h.time||0}" onchange="updateTHint(${i},'time',parseInt(this.value)||0)"></div>`
+          :`<div class="form-group"><label>所需道具</label><select class="form-control" onchange="updateTHint(${i},'reqItemId',this.value)">${io}</select></div>`}
+      </div>
+      <div class="form-group"><label>媒體資源</label><div id="list-${cid}"></div>
+        <button class="btn-save" style="padding:5px 10px;font-size:.85em;background:var(--secondary)" onclick="addMediaItem('list-${cid}','prev-${cid}')">+ 新增媒體</button>
+        <div id="prev-${cid}" class="img-multi-preview"></div></div>
+      <div class="form-group" style="margin-bottom:0"><label>提示文字</label>
+        <textarea class="form-control" rows="2" onchange="updateTHint(${i},'text',this.value)">${h.text||''}</textarea></div>
+    </div>`;
+  });
+  currentTHints.forEach((h,i)=>renderMediaList('list-t_hint_media_'+i,'prev-t_hint_media_'+i));
+}
+function addInteractOption(){ currentInteractOptions.push({text:'',effectType:'clue',effectValue:'',feedbackText:''}); renderInteractOptions(); }
+function removeInteractOption(i){ currentInteractOptions.splice(i,1); renderInteractOptions(); }
+function updateInteractOption(i,k,v){ currentInteractOptions[i][k]=v; renderInteractOptions(); }
+function updateStatsEffect(i,part,val){
+  const o=currentInteractOptions[i]; if(!o) return;
+  const m=String(o.effectValue||'').match(/^(energy|time):(-?\d+)$/);
+  let attr=m?m[1]:'energy', num=m?parseInt(m[2]):10;
+  let dir=num<0?'dec':'inc', amt=Math.abs(num);
+  if(part==='attr')attr=val; else if(part==='dir')dir=val; else if(part==='amt')amt=Math.abs(parseInt(val)||0);
+  o.effectValue=attr+':'+(dir==='dec'?'-':'')+amt; renderInteractOptions();
+}
+function renderInteractOptions(){
+  const box=document.getElementById('t-interact-options-list'); box.innerHTML='';
+  const rm=gameData.rooms[currentRoomId]||{};
+  currentInteractOptions.forEach((opt,i)=>{
+    let eff='';
+    if(opt.effectType==='clue'){
+      eff=`<input type="text" class="form-control" placeholder="圖片/影片網址 (如有需要)" value="${opt.effectValue||''}" onchange="updateInteractOption(${i},'effectValue',this.value)">`;
+    } else if(opt.effectType==='item'){
+      let io='<option value="">--請選擇道具--</option>';
+      gameData.items.forEach(it=>io+=`<option value="${it.id}" ${opt.effectValue===it.id?'selected':''}>${it.name}</option>`);
+      eff=`<select class="form-control" onchange="updateInteractOption(${i},'effectValue',this.value)">${io}</select>`;
+    } else if(opt.effectType==='teleport'){
+      let so='<option value="">--請選擇房間--</option>';
+      Object.values(gameData.rooms).forEach(x=>so+=`<option value="${x.id}" ${opt.effectValue===x.id?'selected':''}>${x.name}</option>`);
+      eff=`<select class="form-control" onchange="updateInteractOption(${i},'effectValue',this.value)">${so}</select>`;
+    } else if(opt.effectType==='endGame'){
+      eff='<div class="warn-note">點選此選項後將直接顯示結局並結束遊戲</div>';
+    } else if(opt.effectType==='stats'){
+      const ev=String(opt.effectValue||''); const m=ev.match(/^(energy|time):(-?\d+)$/);
+      if(!m) opt.effectValue='energy:10';
+      const attr=m?m[1]:'energy', num=m?parseInt(m[2]):10;
+      const dir=num<0?'dec':'inc', amt=Math.abs(num);
+      eff=`<div style="display:flex;gap:6px">
+        <select class="form-control" style="flex:1.2;margin:0" onchange="updateStatsEffect(${i},'attr',this.value)">
+          <option value="energy" ${attr==='energy'?'selected':''}>能量</option>
+          <option value="time" ${attr==='time'?'selected':''}>時間(秒)</option></select>
+        <select class="form-control" style="flex:1;margin:0" onchange="updateStatsEffect(${i},'dir',this.value)">
+          <option value="inc" ${dir==='inc'?'selected':''}>增加</option>
+          <option value="dec" ${dir==='dec'?'selected':''}>減少</option></select>
+        <input type="number" class="form-control" style="flex:1;margin:0" min="0" value="${amt}" onchange="updateStatsEffect(${i},'amt',this.value)"></div>`;
+    }
+    const canEnd=(rm.isEnd&&rm.endCondition==='trigger')||opt.effectType==='endGame';
+    box.innerHTML+=`<div style="border:1px solid #ccc;padding:13px;margin-bottom:12px;border-radius:8px;background:#fafafa">
+      <div style="display:flex;justify-content:space-between;margin-bottom:9px">
+        <strong>選項 ${i+1}</strong>
+        <button class="btn-delete" style="padding:4px 10px;font-size:.8em" onclick="removeInteractOption(${i})">刪除選項</button></div>
+      <div class="form-group"><label>選項文字 (50字內)</label>
+        <input type="text" class="form-control" maxlength="50" value="${opt.text||''}" onchange="updateInteractOption(${i},'text',this.value)"></div>
+      <div class="form-row">
+        <div class="form-group"><label>點選後效果</label>
+          <select class="form-control" onchange="updateInteractOption(${i},'effectType',this.value)">
+            <option value="clue" ${opt.effectType==='clue'?'selected':''}>提供文字或圖片線索</option>
+            <option value="item" ${opt.effectType==='item'?'selected':''}>獲得道具</option>
+            <option value="teleport" ${opt.effectType==='teleport'?'selected':''}>自動跳轉</option>
+            <option value="stats" ${opt.effectType==='stats'?'selected':''}>增加或減少能量/時間</option>
+            ${canEnd?`<option value="endGame" ${opt.effectType==='endGame'?'selected':''}>跳至遊戲結束</option>`:''}
+          </select></div>
+        <div class="form-group"><label>對應參數</label>${eff}</div>
+      </div>
+      <div class="form-group" style="margin-bottom:0"><label>點選後的說明文字/對話</label>
+        <textarea class="form-control" rows="2" onchange="updateInteractOption(${i},'feedbackText',this.value)">${opt.feedbackText||''}</textarea></div>
+    </div>`;
+  });
+}
+
+/* ================= 媒體清單（移植） ================= */
+function initMediaList(listId,arr,prevId){ activeMediaArrays[listId]=arr?[...arr]:[]; renderMediaList(listId,prevId); }
+function addMediaItem(listId,prevId){ if(!activeMediaArrays[listId])activeMediaArrays[listId]=[]; activeMediaArrays[listId].push(''); renderMediaList(listId,prevId); }
+function removeMediaItem(listId,idx,prevId){ activeMediaArrays[listId].splice(idx,1); renderMediaList(listId,prevId); }
+function updateMediaItem(listId,idx,val,prevId){ activeMediaArrays[listId][idx]=val; updateMultiPreview(listId,prevId); }
+function renderMediaList(listId,prevId){
+  const box=document.getElementById(listId); if(!box) return;
+  const arr=activeMediaArrays[listId]||[];
+  box.innerHTML=arr.map((u,i)=>`<div class="media-row">
+    <input type="text" class="form-control" value="${u}" placeholder="圖片或影片網址"
+      onchange="updateMediaItem('${listId}',${i},this.value,'${prevId}')">
+    <button class="btn-delete" style="padding:6px 12px" onclick="removeMediaItem('${listId}',${i},'${prevId}')">✕</button></div>`).join('');
+  updateMultiPreview(listId,prevId);
+}
+function updateMultiPreview(listId,prevId){
+  const p=document.getElementById(prevId); if(!p) return;
+  const arr=(activeMediaArrays[listId]||[]).filter(x=>x.trim()!=='');
+  p.innerHTML=arr.map(u=>/\.(mp4|webm|ogg)$/i.test(u)
+    ?`<video src="${u}" muted></video>`:`<img src="${u}" onerror="this.style.opacity=.25">`).join('');
+}
+function updateSinglePreview(inp,prevId){
+  const img=document.getElementById(prevId);
+  if(inp.value.trim()){ img.src=inp.value; img.style.display='block'; } else img.style.display='none';
+}
+
+/* ================= 道具（移植） ================= */
+function getRewardOptionsHTML(sel){
+  let h='<option value="">無</option>';
+  gameData.items.forEach(i=>h+=`<option value="${i.id}" ${sel===i.id?'selected':''}>${i.name}</option>`);
+  return h;
+}
+function getRoomOpts(sel){
+  let h='<option value="">-- 無限制 --</option>';
+  Object.values(gameData.rooms).forEach(r=>h+=`<option value="${r.id}" ${sel===r.id?'selected':''}>${r.name}</option>`);
+  return h;
+}
+function getHintTriggerOptions(sel){
+  let h='<option value="">--請選擇提示觸發點--</option>';
+  Object.values(gameData.rooms).forEach(r=>r.triggers.forEach(t=>{
+    if(t.type==='check'&&t.hints&&t.hints.some(x=>x.type==='item'))
+      h+=`<option value="${t.id}" ${sel===t.id?'selected':''}>${r.name} / ${t.title||'檢驗點'}</option>`;}));
+  return h;
+}
+function addEditorItem(){
+  gameData.items.push({id:'item_'+Date.now(),name:'新道具',img:'',desc:'',isStarter:false,targetScene:'',actionType:'none',actionValue:''});
+  renderEditorItems();
+}
+function deleteEditorItem(i){ gameData.items.splice(i,1); renderEditorItems(); }
+function updateEditorItem(i,k,v){
+  if(k==='actionType'&&v==='hint'){
+    const it=gameData.items[i];
+    if(it.actionType&&it.actionType!=='none'&&it.actionType!=='hint'){
+      if(!confirm('此道具原先已設定其他使用後效果，改為「兌換提示」後原效果會被清除。確定變更嗎？')){ renderEditorItems(); return; }
+      it.actionValue='';
+    }
+  }
+  gameData.items[i][k]=v; renderEditorItems();
+}
+function renderEditorItems(){
+  const c=document.getElementById('items-list-container');
+  c.innerHTML=gameData.items.map((item,idx)=>`
+  <div style="background:#fff;padding:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:13px">
+    <div style="display:flex;gap:9px;align-items:center">
+      <img src="${item.img||'https://placehold.co/40x40?text=Item'}" style="width:40px;height:40px;border-radius:4px;object-fit:cover">
+      <input type="text" class="form-control" value="${item.name||''}" placeholder="道具名稱" onchange="updateEditorItem(${idx},'name',this.value)" style="flex:1;margin:0">
+      <input type="text" class="form-control" value="${item.img||''}" placeholder="圖片網址" onchange="updateEditorItem(${idx},'img',this.value)" style="flex:1;margin:0">
+      <label style="white-space:nowrap;font-weight:bold;color:var(--primary);font-size:.82em">
+        <input type="checkbox" ${item.isStarter?'checked':''} onchange="updateEditorItem(${idx},'isStarter',this.checked)"> 起始取得</label>
+      <button class="btn-delete" style="padding:6px 12px" onclick="deleteEditorItem(${idx})">刪除</button>
+    </div>
+    <div style="margin-top:8px"><input type="text" class="form-control" value="${item.desc||''}" placeholder="道具說明" onchange="updateEditorItem(${idx},'desc',this.value)"></div>
+    <div style="display:flex;gap:9px;margin-top:8px;align-items:center;background:#f0f7ff;padding:9px;border-radius:6px;border:1px solid #cce5ff">
+      <span style="font-size:.84em;color:#0f4c81;font-weight:bold;white-space:nowrap">🔧 使用設定:</span>
+      <select class="form-control" style="flex:1;margin:0" onchange="updateEditorItem(${idx},'targetScene',this.value)">${getRoomOpts(item.targetScene)}</select>
+      <select class="form-control" style="flex:1;margin:0" onchange="updateEditorItem(${idx},'actionType',this.value)">
+        <option value="none" ${!item.actionType||item.actionType==='none'?'selected':''}>無效果</option>
+        <option value="url" ${item.actionType==='url'?'selected':''}>開啟超連結</option>
+        <option value="text" ${item.actionType==='text'?'selected':''}>獲得線索</option>
+        <option value="score" ${item.actionType==='score'?'selected':''}>獲得積分</option>
+        <option value="energy" ${item.actionType==='energy'?'selected':''}>增加/減少能量(±值)</option>
+        <option value="time" ${item.actionType==='time'?'selected':''}>增加/減少時間(±秒)</option>
+        <option value="hint" ${item.actionType==='hint'?'selected':''}>兌換提示</option>
+        <option value="teleport" ${item.actionType==='teleport'?'selected':''}>自動跳轉至特定房間</option>
+      </select>
+      ${item.actionType==='teleport'
+        ?`<select class="form-control" style="flex:1.5;margin:0" onchange="updateEditorItem(${idx},'actionValue',this.value)"><option value="">--請選擇房間--</option>${Object.values(gameData.rooms).map(r=>`<option value="${r.id}" ${item.actionValue===r.id?'selected':''}>${r.name}</option>`).join('')}</select>`
+        :(item.actionType==='hint'
+          ?`<select class="form-control" style="flex:1.5;margin:0" onchange="updateEditorItem(${idx},'actionValue',this.value)">${getHintTriggerOptions(item.actionValue)}</select>`
+          :`<input type="text" class="form-control" value="${item.actionValue||''}" placeholder="對應數值" onchange="updateEditorItem(${idx},'actionValue',this.value)" style="flex:1.5;margin:0">`)}
+    </div>
+  </div>`).join('');
+}
+
+/* ================= 全域設定（移植 + 武器/能量） ================= */
+function openGlobalSettings(){
+  document.getElementById('g-startBg').value=gameData.startBgImg||'';
+  updateSinglePreview(document.getElementById('g-startBg'),'prev-g-startBg');
+  document.getElementById('g-subtitle').value=gameData.startSubtitle||'';
+  document.getElementById('g-designer').value=gameData.designer||'';
+  document.getElementById('g-passcode').value=gameData.passcode||'';
+  document.getElementById('g-theme').value=gameData.themeColor||'default';
+  document.getElementById('g-popupStyle').value=gameData.popupStyle||'default';
+  const bv=gameData.bgmVolume??70, sv=gameData.sfxVolume??80;
+  document.getElementById('g-bgmVolume').value=bv; document.getElementById('g-bgmVol-val').textContent=bv+'%';
+  document.getElementById('g-sfxVolume').value=sv; document.getElementById('g-sfxVol-val').textContent=sv+'%';
+  document.getElementById('g-weapon').value=gameData.weapon||'blaster';
+  document.getElementById('g-weaponDmg').value=gameData.weaponDmg||20;
+  document.getElementById('g-weaponCd').value=gameData.weaponCd||14;
+  document.getElementById('g-playerHp').value=gameData.playerHp||100;
+  document.getElementById('g-lives').value=gameData.lives||3;
+  document.getElementById('g-speed').value=gameData.playerSpeed||4;
+  document.getElementById('g-timeLimitEnabled').checked=gameData.timeLimitEnabled;
+  document.getElementById('g-timeLimit').value=gameData.timeLimitSeconds||300;
+  document.getElementById('g-bpEnabled').checked=gameData.backpackEnabled;
+  document.getElementById('g-customTabEnabled').checked=gameData.customTabEnabled;
+  document.getElementById('g-ctName').value=gameData.customTabName||'';
+  document.getElementById('g-ctUrl').value=gameData.customTabUrl||'';
+  document.getElementById('g-ctDesc').value=gameData.customTabDesc||'';
+  document.getElementById('g-forceLog').checked=gameData.forceLogExport||false;
+  document.getElementById('g-blindSearch').checked=gameData.blindSearch||false;
+  toggleTime(); toggleCustomTab(); toggleBackpackSettings(); renderEditorItems(); openModal('global-modal');
+}
+function toggleTime(){ document.getElementById('time-input-grp').style.display=document.getElementById('g-timeLimitEnabled').checked?'block':'none'; }
+function toggleCustomTab(){ document.getElementById('custom-tab-grp').style.display=document.getElementById('g-customTabEnabled').checked?'flex':'none'; }
+function toggleBackpackSettings(){ document.getElementById('bp-settings-grp').style.display=document.getElementById('g-bpEnabled').checked?'block':'none'; }
+function saveGlobalSettings(){
+  gameData.startBgImg=document.getElementById('g-startBg').value;
+  gameData.startSubtitle=document.getElementById('g-subtitle').value;
+  gameData.designer=document.getElementById('g-designer').value;
+  gameData.passcode=document.getElementById('g-passcode').value;
+  gameData.themeColor=document.getElementById('g-theme').value;
+  gameData.popupStyle=document.getElementById('g-popupStyle').value;
+  gameData.bgmVolume=parseInt(document.getElementById('g-bgmVolume').value);
+  gameData.sfxVolume=parseInt(document.getElementById('g-sfxVolume').value);
+  gameData.weapon=document.getElementById('g-weapon').value;
+  gameData.weaponDmg=parseInt(document.getElementById('g-weaponDmg').value)||20;
+  gameData.weaponCd=parseInt(document.getElementById('g-weaponCd').value)||14;
+  gameData.playerHp=parseInt(document.getElementById('g-playerHp').value)||100;
+  gameData.lives=parseInt(document.getElementById('g-lives').value)||3;
+  gameData.playerSpeed=parseFloat(document.getElementById('g-speed').value)||4;
+  gameData.timeLimitEnabled=document.getElementById('g-timeLimitEnabled').checked;
+  gameData.timeLimitSeconds=parseInt(document.getElementById('g-timeLimit').value)||300;
+  gameData.backpackEnabled=document.getElementById('g-bpEnabled').checked;
+  gameData.customTabEnabled=document.getElementById('g-customTabEnabled').checked;
+  gameData.customTabName=document.getElementById('g-ctName').value;
+  gameData.customTabUrl=document.getElementById('g-ctUrl').value;
+  gameData.customTabDesc=document.getElementById('g-ctDesc').value;
+  gameData.forceLogExport=document.getElementById('g-forceLog').checked;
+  gameData.blindSearch=document.getElementById('g-blindSearch').checked;
+  autoSave(); closeModal('global-modal');
+}
+
+/* ================= 檢視切換與流程圖 ================= */
+function switchView(v){
+  activeView=v;
+  document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));
+  if(v==='room'){
+    document.querySelectorAll('.view-tab')[0].classList.add('active');
+    document.getElementById('room-view').style.display='flex';
+    document.getElementById('flow-view').style.display='none';
+    resizeStage();
+  } else {
+    document.querySelectorAll('.view-tab')[1].classList.add('active');
+    document.getElementById('room-view').style.display='none';
+    document.getElementById('flow-view').style.display='block';
+    drawFlowchart();
+  }
+}
+function drawFlowchart(){
+  if(activeView!=='flow') return;
+  const c=document.getElementById('flow-nodes'); c.innerHTML='';
+  Object.values(gameData.rooms).forEach(r=>{
+    const n=document.createElement('div');
+    let cls='flow-node'; if(r.isStart)cls+=' start-node'; if(r.isEnd)cls+=' end-node';
+    n.className=cls; n.id='node-'+r.id;
+    n.style.left=(r.uiX||50)+'px'; n.style.top=(r.uiY||50)+'px';
+    let iC=0,pC=0,cC=0,eC=0,inC=0,mC=0;
+    r.triggers.forEach(t=>{ if(t.type==='info')iC++; if(t.type==='portal')pC++; if(t.type==='check')cC++;
+      if(t.type==='embed')eC++; if(t.type==='interact')inC++; if(t.type==='machine')mC++; });
+    n.innerHTML=`<h4>${r.name}</h4>
+      <div class="flow-stats"><span>ℹ️ ${iC}</span><span>❓ ${cC}</span><span>💬 ${inC}</span>
+      <span>⬆️ ${pC}</span><span>🔗 ${eC}</span><span>⚗️ ${mC}</span><span>👾 ${r.enemyCount}</span></div>`;
+    n.onmousedown=e=>{
+      draggedNode={id:r.id,el:n,ox:e.clientX-n.offsetLeft,oy:e.clientY-n.offsetTop};
+      document.onmousemove=me=>{
+        if(!draggedNode)return;
+        const nx=me.clientX-draggedNode.ox, ny=me.clientY-draggedNode.oy;
+        draggedNode.el.style.left=nx+'px'; draggedNode.el.style.top=ny+'px';
+        gameData.rooms[draggedNode.id].uiX=nx; gameData.rooms[draggedNode.id].uiY=ny;
+        drawFlowLines();
+      };
+      document.onmouseup=()=>{document.onmousemove=null;document.onmouseup=null;draggedNode=null;autoSave();};
+    };
+    n.ondblclick=()=>{ selectRoom(r.id); switchView('room'); };
+    c.appendChild(n);
+  });
+  drawFlowLines();
+}
+function drawFlowLines(){
+  const cv=document.getElementById('flow-canvas'), view=document.getElementById('flow-view');
+  cv.width=view.scrollWidth||view.clientWidth; cv.height=view.scrollHeight||view.clientHeight;
+  const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.lineWidth=2; ctx.strokeStyle='rgba(15,76,129,.6)';
+  Object.values(gameData.rooms).forEach(r=>{
+    r.triggers.filter(t=>t.type==='portal'&&t.targetRoomId).forEach(t=>{
+      const n1=document.getElementById('node-'+r.id), n2=document.getElementById('node-'+t.targetRoomId);
+      if(!n1||!n2) return;
+      const x1=n1.offsetLeft+n1.offsetWidth/2, y1=n1.offsetTop+n1.offsetHeight/2;
+      const x2=n2.offsetLeft+n2.offsetWidth/2, y2=n2.offsetTop+n2.offsetHeight/2;
+      ctx.beginPath(); ctx.moveTo(x1,y1);
+      const c1x=x1+(x2-x1)/2, c2x=c1x;
+      ctx.bezierCurveTo(c1x,y1,c2x,y2,x2,y2); ctx.stroke();
+      const tt=0.55, mt=1-tt;
+      const mx=mt*mt*mt*x1+3*mt*mt*tt*c1x+3*mt*tt*tt*c2x+tt*tt*tt*x2;
+      const my=mt*mt*mt*y1+3*mt*mt*tt*y1+3*mt*tt*tt*y2+tt*tt*tt*y2;
+      const dx=3*mt*mt*(c1x-x1)+6*mt*tt*(c2x-c1x)+3*tt*tt*(x2-c2x);
+      const dy=3*mt*mt*(y1-y1)+6*mt*tt*(y2-y1)+3*tt*tt*(y2-y2);
+      const a=Math.atan2(dy||(y2-y1),dx);
+      ctx.beginPath();
+      ctx.moveTo(mx+8*Math.cos(a),my+8*Math.sin(a));
+      ctx.lineTo(mx-12*Math.cos(a-Math.PI/7),my-12*Math.sin(a-Math.PI/7));
+      ctx.lineTo(mx-12*Math.cos(a+Math.PI/7),my-12*Math.sin(a+Math.PI/7));
+      ctx.closePath(); ctx.fillStyle='#0f4c81'; ctx.fill();
+    });
+  });
+}
+
+/* ================= 專案匯出/匯入 ================= */
+function exportTXT(){
+  const name=document.getElementById('game-name').value.trim()||'Untitled';
+  gameData.gameName=name; autoSave();
+  const clean=JSON.parse(JSON.stringify(gameData,(k,v)=>k==='_img'?undefined:v));
+  const blob=new Blob([JSON.stringify(clean,null,2)],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=`ACT_${name}.txt`; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function importTXT(ev){
+  const f=ev.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      gameData=JSON.parse(e.target.result);
+      if(!gameData.rooms) gameData.rooms={};
+      Object.values(gameData.rooms).forEach(r=>r.objects.forEach(o=>{
+        if(o.src==='custom'&&o.img){o._img=new Image();o._img.crossOrigin='anonymous';o._img.onload=redrawStage;o._img.src=o.img;}}));
+      document.getElementById('game-name').value=gameData.gameName||'';
+      autoSave(); renderRoomList();
+      const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]);
+      sysAlert('匯入成功！');
+    }catch(err){ sysAlert('格式錯誤：'+err.message); }
+    ev.target.value='';
+  };
+  rd.readAsText(f);
+}
+
+/* ================= 內建示範專案 ================= */
+const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 730, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 730, "scale": 1, "floor": 1}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 410, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80}}};
+function loadDemo(){
+  sysConfirm('載入示範專案「實驗設施保衛戰」？\n這會覆蓋目前的編輯內容（若尚未匯出請先匯出專案）。',()=>{
+    gameData=JSON.parse(JSON.stringify(DEMO_PROJECT));
+    if(!gameData.rooms)gameData.rooms={};
+    document.getElementById('game-name').value=gameData.gameName||'';
+    autoSave(); renderRoomList();
+    const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]);
+    sysAlert('✅ 示範專案已載入！\n共 4 個房間，含資訊/檢驗/互動/穿越/機台觸發點、樓中樓與清敵結局。\n按上方「▶️ 試玩」即可遊玩。');
+  });
+}
+
+/* ================= 初始化 ================= */
+async function loadProps(){
+  try{
+    const r=await fetch('props2.json'); PROPS=await r.json();
+    propsImg=new Image();
+    propsImg.onload=()=>{propsReady=true;renderLibGrid();redrawStage();};
+    propsImg.onerror=()=>{ document.getElementById('lib-grid').innerHTML=
+      '<div style="grid-column:1/-1;color:#c92a2a;font-size:.72em;padding:10px;line-height:1.6">找不到 props2.png。<br>請將 props2.png / props2.json 與本編輯器放在同一資料夾，並用本機伺服器開啟。</div>'; };
+    propsImg.src='props2.png';
+  }catch(e){
+    document.getElementById('lib-grid').innerHTML=
+      '<div style="grid-column:1/-1;color:#c92a2a;font-size:.72em;padding:10px;line-height:1.6">找不到 props2.json。<br>請用本機伺服器開啟（python3 -m http.server）。</div>';
+  }
+}
+window.addEventListener('load',()=>{
+  setTimeout(()=>{const s=document.getElementById('splash-screen');s.style.opacity='0';
+    setTimeout(()=>s.style.display='none',800);},1200);
+  const hadSave=autoLoad();
+  if(!hadSave){ gameData=JSON.parse(JSON.stringify(DEMO_PROJECT)); }
+  document.getElementById('game-name').value=gameData.gameName||'';
+  document.getElementById('game-name').oninput=e=>{gameData.gameName=e.target.value;autoSave();};
+  setObjSource('builtin'); setMode('select');
+  renderRoomList();
+  const ks=Object.keys(gameData.rooms);
+  if(ks.length) selectRoom(ks[0]); else createNewRoom();
+  loadProps(); resizeStage();
+});
+</script>
+<script id="raw-runtime" type="text/plain">
+/* ================================================================
+   NTUSTMEG ACTGame — 執行期引擎（資料驅動）
+   由編輯器 payload 生成：房間、物件、觸發點、敵人、玩家武器/能量
+   ================================================================ */
+const P = window.__PAYLOAD__;
+const IS_PREVIEW = !!P.isPreview;
+const VIEW_W=800, VIEW_H=450, ROOM_W=1600, FLOOR_TOP=250, FLOOR_BOT=430, UPPER_RISE=300;
+const GRAV=0.8, GLOBAL_SCALE=0.8;
+
+/* ---- 精靈圖框架（與原遊戲一致） ---- */
+function Sheet(src,cfg){this.c=cfg.centers;this.t=cfg.rowTops;this.rh=cfg.rowH;this.rhs=cfg.rowHeights||null;
+  this.cw=cfg.cellW;this.loaded=false;this.img=new Image();this.img.onload=()=>this.loaded=true;this.img.src=src;}
+Sheet.prototype.rect=function(row,col){const cx=this.c[col];const sh=(this.rhs&&this.rhs[row])||this.rh;
+  return{sx:cx-this.cw/2,sy:this.t[row],sw:this.cw,sh};};
+const SOLDIER=new Sheet('NEWC.png',{centers:[74,219,363,508,652,801,944,1090,1238,1383,1527,1677,1814,1956],
+  rowTops:[0,170,321,499,641,819],rowHeights:[151,145,160,154,162,146],rowH:162,cellW:144});
+const ROBOT=new Sheet('ROBOT.png',{centers:[96,275,449,615,787,960,1140,1309,1479,1655,1820,1984],
+  rowTops:[56,243,415,599,774,947],rowH:160,cellW:172});
+const SOLDIER_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},
+  walk:{row:1,start:0,frames:14,speed:5,loop:true,step:true},
+  run:{row:2,start:0,frames:14,speed:4,loop:true,step:true},jump:{row:2,start:6,frames:4,speed:6,loop:false},
+  shoot:{row:3,start:3,frames:8,speed:2,loop:false,fireFrame:4},
+  beam:{row:4,start:0,frames:14,speed:2,loop:false,fireFrame:6},
+  hurt:{row:5,start:0,frames:5,speed:6,loop:false},defeated:{row:5,start:5,frames:9,speed:7,loop:false}};
+const ROBOT_ANIM={idle:{row:0,start:0,frames:9,speed:9,loop:true},walk:{row:1,start:0,frames:12,speed:5,loop:true,step:true},
+  run:{row:2,start:0,frames:8,speed:4,loop:true,step:true},attack:{row:3,start:0,frames:6,speed:3,loop:false,hitFrame:3},
+  hurt:{row:5,start:0,frames:4,speed:6,loop:false},defeated:{row:5,start:8,frames:4,speed:8,loop:false}};
+function afc(a){return a.frames;} function acol(a,f){return a.start+f;}
+
+/* ---- 物件圖 ---- */
+const PROPS=window.__PROPS__||{};
+const PROP_SCALES=window.__PROP_SCALES__||{};
+const propsImg=new Image(); let propsLoaded=false;
+propsImg.onload=()=>propsLoaded=true; propsImg.src='props2.png';
+const customImgs={};
+function getCustomImg(url){ if(!customImgs[url]){const im=new Image();im.crossOrigin='anonymous';im.src=url;customImgs[url]=im;} return customImgs[url]; }
+
+/* ---- 音效（極簡 WebAudio） ---- */
+const SFX=(()=>{let ac=null;function ctx(){if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();return ac;}
+  function beep(f,d,type,vol){try{const c=ctx();const o=c.createOscillator(),g=c.createGain();
+    o.type=type||'square';o.frequency.value=f;g.gain.value=(vol||0.06)*(P.sfxVolume/100);
+    o.connect(g);g.connect(c.destination);o.start();g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+d);
+    o.stop(c.currentTime+d);}catch(e){}}
+  return{shoot:()=>beep(680,0.08,'square'),beam:()=>beep(300,0.35,'sawtooth',0.09),
+    hit:()=>beep(200,0.12,'square'),hurt:()=>beep(160,0.18,'sawtooth',0.08),
+    jump:()=>beep(520,0.12,'sine'),pickup:()=>beep(900,0.15,'sine',0.08),
+    defeat:()=>beep(120,0.4,'sawtooth',0.09),door:()=>beep(440,0.15,'sine')};})();
+
+/* ---- 遊戲狀態 ---- */
+const canvas=document.getElementById('game-canvas'), ctx=canvas.getContext('2d');
+let curRoom=null, player=null, enemies=[], projectiles=[], particles=[];
+let camera={x:0,y:0}, keys={}, justPressed={}, score=0, lives=P.lives, gameState='title';
+let visited=[], solvedChecks=[], viewedInfos=[], clearedRooms=[], inventory=[], logs=[];
+let unlockedHints=[], usedItems=[];
+let machineOpen=false, currentTrigger=null, pickupFlash=0;
+let timeLeft=P.timeLimitSeconds, timerId=null, endingTriggered=false;
+/* 強化（機台） */
+let attackUp=0, speedUp=0, firerateUp=0, defenseUp=0, maxhpUp=0,
+    shieldMax=0, shieldCur=0, regenUp=0, jumpUp=0, regenTick=0, shieldTick=0;
+const machineSuccess={};
+Object.keys(P.rooms).forEach(rid=>P.rooms[rid].triggers.forEach(t=>{if(t.type==='machine')machineSuccess[t.id]=0;}));
+
+/* ---- 前提條件（移植 checkPrereq） ---- */
+function checkPrereq(reqs){
+  if(!reqs||!reqs.length) return true;
+  return reqs.every(req=>{
+    if(req.startsWith('room:')) return visited.includes(req.split(':')[1]);
+    const hid=req.startsWith('hs:')?req.split(':')[1]:req;
+    return solvedChecks.includes(hid)||viewedInfos.includes(hid);
+  });
+}
+
+/* ---- 實體基底 ---- */
+class Entity{
+  constructor(x,sheet,anim){this.x=x;this.z=0;this.vz=0;this.floorOffset=0;
+    this.sheet=sheet;this.anims=anim;this.anim='idle';this.frame=0;this.timer=0;
+    this.dir=1;this.onPlatform=0;this.isHurt=false;this.hurtTimer=0;this.isDead=false;}
+  setAnim(n){if(this.anim!==n){this.anim=n;this.frame=0;this.timer=0;}}
+  advance(){const a=this.anims[this.anim];if(!a)return;const tot=afc(a);this.timer++;
+    if(this.timer>a.speed){this.timer=0;if(this.frame<tot-1)this.frame++;
+      else if(a.loop)this.frame=0;else this.frameDone=true;}}
+  draw(){const a=this.anims[this.anim];if(!a||!this.sheet.loaded)return;
+    const r=this.sheet.rect(a.row,acol(a,this.frame));
+    const sc=(VIEW_H/ r.sh)*0.62*GLOBAL_SCALE*1.5;
+    const dw=r.sw*sc, dh=r.sh*sc;
+    const gy=groundYFor(this)-this.z;
+    const sx=this.x-camera.x, sy=gy-camera.y;
+    ctx.save();ctx.translate(sx,sy);if(this.dir<0)ctx.scale(-1,1);
+    if(this.isHurt&&Math.floor(this.hurtTimer/3)%2)ctx.globalAlpha=0.5;
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(this.sheet.img,r.sx,r.sy,r.sw,r.sh,-dw/2,-dh,dw,dh);
+    ctx.restore();}
+}
+function groundYFor(e){ return FLOOR_BOT - e.floorOffset; }
+
+/* ---- 玩家 ---- */
+class Player extends Entity{
+  constructor(x){super(x,SOLDIER,SOLDIER_ANIM);
+    this.speed=P.playerSpeed; this.maxHp=P.playerHp; this.hp=P.playerHp;
+    this.cd=0; this.shootLock=0;}
+  update(){
+    if(this.isDead)return;
+    const sp=this.speed+speedUp;
+    let moving=false;
+    if(this.shootLock<=0){
+      if(keys['ArrowLeft']||keys['KeyA']){this.x-=sp;this.dir=-1;moving=true;}
+      if(keys['ArrowRight']||keys['KeyD']){this.x+=sp;this.dir=1;moving=true;}
+    }
+    this.x=Math.max(30,Math.min(ROOM_W-30,this.x));
+    // 樓中樓：內部樓梯切換樓層
+    handleStairs(this);
+    // 跳躍
+    const onGround=this.vz===0&&this.z<=this.onPlatform+0.5;
+    if(justPressed['Space']&&onGround&&this.shootLock<=0){this.vz=13+jumpUp;this.setAnim('jump');SFX.jump();}
+    // 重力/平台
+    this.z+=this.vz; this.vz-=GRAV;
+    this.onPlatform=platformHeight(this.x,this.floorOffset);
+    if(this.z<=this.onPlatform){this.z=this.onPlatform;this.vz=0;}
+    // 攻擊
+    if(this.cd>0)this.cd--;
+    if(this.shootLock>0){this.shootLock--;}
+    const canShoot=this.vz===0&&this.z<=this.onPlatform+0.5;
+    if(justPressed['KeyZ']&&this.cd<=0&&canShoot){this.shoot(false);}
+    if(justPressed['KeyC']&&this.cd<=0&&canShoot&&P.weapon==='blaster'){this.shoot(true);}
+    // 動畫
+    if(this.shootLock>0){/* keep shoot/beam anim */}
+    else if(!onGround)this.setAnim('jump');
+    else if(moving)this.setAnim('walk');
+    else this.setAnim('idle');
+    this.advance();
+    if(this.isHurt&&--this.hurtTimer<=0)this.isHurt=false;
+    // 回復 / 護盾回充
+    if(regenUp>0&&++regenTick>=60){regenTick=0;this.hp=Math.min(this.maxHp,this.hp+regenUp*2);}
+    if(shieldMax>0&&!this.isHurt&&shieldCur<shieldMax&&++shieldTick>=90){shieldTick=0;shieldCur=Math.min(shieldMax,shieldCur+5);}
+  }
+  shoot(charge){
+    const base=P.weaponDmg+attackUp;
+    const cd=Math.max(4,(P.weaponCd)-firerateUp*2);
+    if(charge){this.setAnim('beam');this.shootLock=14;this.cd=cd*2;SFX.beam();
+      setTimeout(()=>spawnProj(this,base*3,true),120);}
+    else{this.setAnim('shoot');this.shootLock=8;this.cd=cd;SFX.shoot();
+      setTimeout(()=>spawnProj(this,base,false),90);}
+  }
+  hurt(dmg,dir){
+    if(this.isDead)return;
+    const red=Math.min(0.6,defenseUp*0.08); dmg*=(1-red);
+    if(shieldCur>0){const ab=Math.min(shieldCur,dmg);shieldCur-=ab;dmg-=ab;
+      if(dmg<=0){this.isHurt=true;this.hurtTimer=10;SFX.hit();return;}}
+    this.hp-=dmg;this.isHurt=true;this.hurtTimer=18;this.x+=dir*16;this.setAnim('hurt');SFX.hurt();
+    if(this.hp<=0){loseLife();}
+  }
+}
+function spawnProj(owner,dmg,big){
+  projectiles.push({x:owner.x+owner.dir*30,z:owner.z+70,floorOffset:owner.floorOffset,
+    vx:owner.dir*(big?9:13),dmg,big,life:60,from:'player'});
+}
+
+/* ---- 敵人 ---- */
+class Enemy extends Entity{
+  constructor(x,floorOffset,hp,atk){super(x,ROBOT,ROBOT_ANIM);
+    this.floorOffset=floorOffset;this.maxHp=hp;this.hp=hp;this.atk=atk;
+    this.z=0;this.attackCd=0;this.state='idle';}
+  update(pl){
+    if(this.isDead){this.advance();return;}
+    if(this.floorOffset!==pl.floorOffset){this.setAnim('idle');this.advance();return;}
+    const dist=pl.x-this.x; const adist=Math.abs(dist);
+    this.dir=dist>=0?1:-1;
+    if(this.attackCd>0)this.attackCd--;
+    if(adist>70){this.x+=this.dir*1.6;this.setAnim('walk');}
+    else{
+      this.setAnim('attack');
+      if(this.attackCd<=0&&Math.abs(pl.z-this.z)<60){
+        this.attackCd=70;
+        setTimeout(()=>{if(!this.isDead&&Math.abs(pl.x-this.x)<80&&pl.floorOffset===this.floorOffset)pl.hurt(this.atk,this.dir);},400);
+      }
+    }
+    this.z=platformHeight(this.x,this.floorOffset);
+    this.advance();
+    if(this.isHurt&&--this.hurtTimer<=0)this.isHurt=false;
+  }
+  hurt(dmg,dir){if(this.isDead)return;this.hp-=dmg;this.isHurt=true;this.hurtTimer=12;this.x+=dir*8;SFX.hit();
+    for(let i=0;i<6;i++)particles.push({x:this.x,y:groundYFor(this)-this.z-60,vx:(Math.random()-0.5)*6,vy:-Math.random()*5,life:20,c:'#ffcc44'});
+    if(this.hp<=0){this.isDead=true;this.setAnim('defeated');SFX.defeat();score+=10;updateHUD();}}
+}
+</script>
+<script id="raw-runtime-2" type="text/plain">
+/* ---- 房間載入 ---- */
+function propScale(o){
+  if(o.src==='builtin') return (PROP_SCALES[o.prop]||0.6)*GLOBAL_SCALE*(o.scale||1);
+  return (o.scale||1);
+}
+function objRect(o){
+  if(o.src==='builtin'&&PROPS[o.prop]){const p=PROPS[o.prop],s=propScale(o);
+    return{w:p.w*s,h:p.h*s};}
+  return{w:(o.w||120)*(o.scale||1),h:(o.h||120)*(o.scale||1)};
+}
+function platformHeight(x,floorOffset){
+  // 站上可碰撞物件頂端
+  if(!curRoom)return 0;
+  let h=0;
+  curRoom.objects.forEach(o=>{
+    if(!o.collide)return;
+    const of=o.floor?UPPER_RISE:0; if(of!==floorOffset)return;
+    const r=objRect(o); const half=r.w/2;
+    if(x>=o.x-half&&x<=o.x+half){ h=Math.max(h, r.h*0.55); }
+  });
+  return h;
+}
+function handleStairs(pl){
+  if(!curRoom||!curRoom.tall)return;
+  // 房間右側固定內部樓梯區
+  const stairX=ROOM_W-140, stairW=130;
+  const nearStair=Math.abs(pl.x-stairX)<stairW/2;
+  if(nearStair){
+    if((justPressed['ArrowUp']||justPressed['KeyW'])&&pl.floorOffset===0){pl.floorOffset=UPPER_RISE;SFX.door();}
+    else if((justPressed['ArrowDown']||justPressed['KeyS'])&&pl.floorOffset===UPPER_RISE){pl.floorOffset=0;SFX.door();}
+  }
+}
+function loadRoom(id,fromDir){
+  curRoom=P.rooms[id]; window.__curRoomId=id;
+  if(!visited.includes(id))visited.push(id);
+  enemies=[];projectiles=[];particles=[];
+  // 生成敵人（避開右側樓梯與出入口）
+  const n=curRoom.enemyCount||0;
+  for(let i=0;i<n;i++){
+    const x=200+Math.random()*(ROOM_W-500);
+    const fo=(curRoom.tall&&Math.random()<0.35)?UPPER_RISE:0;
+    enemies.push(new Enemy(x,fo,curRoom.enemyHp||60,curRoom.enemyAtk||10));
+  }
+  if(!player){player=new Player(120);}
+  else{ // 依來向決定進入位置
+    if(fromDir==='right')player.x=ROOM_W-80;
+    else if(fromDir==='left')player.x=80;
+    else player.x=120;
+    player.floorOffset=0;player.z=0;player.vz=0;
+  }
+  // BGM
+  const bgm=document.getElementById('bgm');
+  if(curRoom.bgmUrl){ if(bgm.src!==curRoom.bgmUrl){bgm.src=curRoom.bgmUrl;} bgm.volume=P.bgmVolume/100; bgm.play().catch(()=>{});}
+  // 前情提要
+  if(curRoom.preludeStory||( curRoom.preludeMedia&&curRoom.preludeMedia.length)){
+    showStory(curRoom.name, curRoom.preludeStory, curRoom.preludeMedia);
+  }
+  // 抵達即結局
+  if(curRoom.isEnd&&curRoom.endCondition==='arrive'){ setTimeout(()=>triggerEnding(),600); }
+  addLog('進入房間',curRoom.name);
+  updateHUD();
+}
+
+/* ---- 觸發點互動（走近按 X） ---- */
+function nearestTrigger(){
+  if(!curRoom)return null;
+  let best=null,bd=1e9;
+  curRoom.triggers.forEach(t=>{
+    if((t.floor?UPPER_RISE:0)!==player.floorOffset)return;
+    if(!checkPrereq(t.requires))return;
+    const d=Math.hypot(player.x-t.x,(player.z+50)-( (FLOOR_BOT-t.y) *0 + 50));
+    const dx=Math.abs(player.x-t.x);
+    if(dx<(t.radius||70)&&dx<bd){bd=dx;best=t;}
+  });
+  return best;
+}
+function doTriggerInteract(){
+  const t=nearestTrigger(); if(!t)return;
+  currentTrigger=t;
+  if(t.type==='portal'){ portalTo(t); }
+  else if(t.type==='info'){ viewedInfos.push(t.id); showStory(t.title,t.text,t.media,t.link);
+    if(t.rewardItemId)giveReward(t.rewardItemId); addLog('資訊',t.title); updateHUD(); }
+  else if(t.type==='embed'){ openEmbed(t.url); addLog('嵌入',t.title); }
+  else if(t.type==='machine'){ openMachine(t); }
+  else if(t.type==='check'){ openCheck(t); }
+  else if(t.type==='interact'){ openInteract(t); }
+}
+function portalTo(t){
+  if(!t.targetRoomId)return sysAlert('此出入口尚未設定目標房間。');
+  SFX.door(); addLog('穿越',curRoom.name+' → '+(P.rooms[t.targetRoomId]||{}).name);
+  const dir = t.x>ROOM_W/2?'left':'right';
+  const ov=document.getElementById('trans'); const mode=t.transition||'none';
+  if(mode==='none'){ loadRoom(t.targetRoomId,dir); return; }
+  ov.style.transition='opacity .4s';
+  ov.style.background=mode==='fadeWhite'?'#fff':'#000';
+  ov.style.opacity='1';
+  setTimeout(()=>{loadRoom(t.targetRoomId,dir);ov.style.opacity='0';},420);
+}
+
+/* ---- 機台覆蓋（iframe + postMessage） ---- */
+function openMachine(t){
+  machineOpen=true;
+  const m=P.MACHINES[t.machineId];
+  const ov=document.getElementById('machine-ov');
+  document.getElementById('machine-title').textContent=m.title;
+  const fr=document.getElementById('machine-frame');
+  fr.src=m.src;
+  ov.style.display='flex';
+  const maxS=t.machineMax||2;
+  fr.onload=()=>{ try{fr.contentWindow.postMessage({type:'machineState',successCount:machineSuccess[t.id]||0,maxSuccess:maxS},'*');}catch(e){} };
+  currentTrigger=t;
+}
+function closeMachine(){
+  machineOpen=false;
+  document.getElementById('machine-ov').style.display='none';
+  document.getElementById('machine-frame').src='';
+}
+window.addEventListener('message',e=>{
+  const d=e.data; if(!d)return;
+  if(d.type==='attackUpgrade'){
+    const t=currentTrigger;
+    if(t&&(machineSuccess[t.id]||0) < (t.machineMax||2)){
+      machineSuccess[t.id]=(machineSuccess[t.id]||0)+1;
+      applyUpgrade(d.kind,d.amount);
+      if(!solvedChecks.includes(t.id))solvedChecks.push(t.id);
+      pickupFlash=18; SFX.pickup(); addLog('機台強化',P.MACHINES[t.machineId].title+' +'+d.kind);
+      // 回傳新的成功次數
+      const fr=document.getElementById('machine-frame');
+      try{fr.contentWindow.postMessage({type:'machineState',successCount:machineSuccess[t.id],maxSuccess:(t.machineMax||2)},'*');}catch(err){}
+      updateHUD();
+    }
+  }
+});
+function applyUpgrade(kind,amt){
+  if(kind==='damage')attackUp+=amt;
+  else if(kind==='speed')speedUp+=amt*0.12;
+  else if(kind==='firerate')firerateUp+=amt;
+  else if(kind==='defense')defenseUp+=amt;
+  else if(kind==='maxhp'){maxhpUp+=amt;player.maxHp=P.playerHp+maxhpUp;player.hp+=amt;}
+  else if(kind==='shield'){shieldMax+=amt;shieldCur=shieldMax;}
+  else if(kind==='regen')regenUp+=amt;
+  else if(kind==='jump')jumpUp+=amt;
+}
+
+/* ---- 檢驗點（移植 submitCheck 四種比對） ---- */
+function openCheck(t){
+  const ov=document.getElementById('ov-check');
+  document.getElementById('check-q').textContent=t.question||'請輸入答案';
+  document.getElementById('check-ans').value='';
+  const mc=document.getElementById('check-media');
+  mc.innerHTML=(t.media||[]).map(u=>mediaHTML(u)).join('');
+  mc.style.display=(t.media&&t.media.length)?'block':'none';
+  ov.style.display='flex'; currentTrigger=t;
+  document.getElementById('check-hint-btn').style.display=(t.hints&&t.hints.length)?'block':'none';
+}
+function submitCheck(){
+  const t=currentTrigger, val=document.getElementById('check-ans').value.trim();
+  let ok=false;
+  if(!t.answer)ok=true;
+  else{const a=t.answer;
+    switch(t.answerType){
+      case'exact':ok=val.toUpperCase()===a.toUpperCase();break;
+      case'contains_any':ok=a.split(',').some(k=>val.toUpperCase().includes(k.trim().toUpperCase()));break;
+      case'contains_all':ok=a.split(',').every(k=>val.toUpperCase().includes(k.trim().toUpperCase()));break;
+      case'regex':try{ok=new RegExp(a,'i').test(val);}catch(e){}break;
+    }}
+  if(ok){
+    if(!solvedChecks.includes(t.id))solvedChecks.push(t.id);
+    score+=(t.score||1); addLog('答對',t.title); updateHUD();
+    document.getElementById('ov-check').style.display='none';
+    if(t.rewardItemId)giveReward(t.rewardItemId);
+    if(t.feedbackText||(t.feedbackMedia&&t.feedbackMedia.length))
+      showStory('✅ 答對了！',t.feedbackText,t.feedbackMedia);
+    else sysAlert('✅ 答對了！');
+    if(t.jumpToEnding)setTimeout(()=>triggerEnding(),400);
+  } else { addLog('答錯',val); sysAlert('❌ 答案不正確，再試試看。'); }
+}
+function showCheckHint(){
+  const t=currentTrigger; if(!t.hints||!t.hints.length)return;
+  const h=t.hints[0];
+  showStory('💡 提示',h.text,h.media);
+}
+
+/* ---- 互動點（移植選項效果） ---- */
+function openInteract(t){
+  const ov=document.getElementById('ov-interact');
+  document.getElementById('interact-title').textContent=t.title;
+  document.getElementById('interact-desc').textContent=t.text||'';
+  const mc=document.getElementById('interact-media');
+  mc.innerHTML=(t.media||[]).map(u=>mediaHTML(u)).join('');
+  mc.style.display=(t.media&&t.media.length)?'block':'none';
+  const box=document.getElementById('interact-options'); box.innerHTML='';
+  (t.options||[]).forEach((opt,i)=>{
+    const b=document.createElement('button');b.className='opt-btn';b.textContent=opt.text||('選項 '+(i+1));
+    b.onclick=()=>doInteractOption(t,opt);box.appendChild(b);
+  });
+  if(t.link){const a=document.createElement('a');a.href=t.link;a.target='_blank';a.className='opt-btn';a.textContent='🔗 開啟連結';box.appendChild(a);}
+  ov.style.display='flex'; currentTrigger=t;
+  if(!solvedChecks.includes(t.id))solvedChecks.push(t.id);
+}
+function doInteractOption(t,opt){
+  if(opt.effectType==='clue'){ showStory(t.title,opt.feedbackText,opt.effectValue?[opt.effectValue]:[]); }
+  else if(opt.effectType==='item'){ if(opt.effectValue)giveReward(opt.effectValue); if(opt.feedbackText)sysAlert(opt.feedbackText); }
+  else if(opt.effectType==='teleport'){ document.getElementById('ov-interact').style.display='none'; if(opt.effectValue)loadRoom(opt.effectValue,'right'); return; }
+  else if(opt.effectType==='stats'){ const m=String(opt.effectValue||'').match(/^(energy|time):(-?\d+)$/);
+    if(m){const v=parseInt(m[2]); if(m[1]==='energy'){player.hp=Math.max(0,Math.min(player.maxHp,player.hp+v));} else {timeLeft+=v;} }
+    if(opt.feedbackText)sysAlert(opt.feedbackText); updateHUD(); }
+  else if(opt.effectType==='endGame'){ document.getElementById('ov-interact').style.display='none'; triggerEnding(); return; }
+  addLog('互動選項',opt.text||'');
+}
+
+/* ---- 道具 ---- */
+function giveReward(itemId){
+  if(!P.backpackEnabled||!itemId)return;
+  if(!inventory.includes(itemId)&&!usedItems.includes(itemId)){
+    inventory.push(itemId);
+    const it=P.items.find(i=>i.id===itemId);
+    if(it){document.getElementById('acq-img').src=it.img||'https://placehold.co/120';
+      document.getElementById('acq-name').textContent=it.name;
+      document.getElementById('ov-acq').style.display='flex';}
+    updateHUD();
+  }
+}
+
+/* ---- 說明/媒體/嵌入 ---- */
+function mediaHTML(u){return /\.(mp4|webm|ogg)$/i.test(u)
+  ?`<video src="${u}" controls style="max-width:100%;border-radius:8px"></video>`
+  :`<img src="${u}" style="max-width:100%;border-radius:8px">`;}
+function showStory(title,text,media,link){
+  document.getElementById('msg-title').textContent=title||'訊息';
+  let h=(media||[]).map(u=>mediaHTML(u)).join('');
+  if(text)h+=`<div style="white-space:pre-wrap;line-height:1.7;margin-top:10px">${text}</div>`;
+  if(link)h+=`<div style="margin-top:10px"><a href="${link}" target="_blank" style="color:var(--accent)">🔗 開啟連結</a></div>`;
+  document.getElementById('msg-body').innerHTML=h;
+  document.getElementById('ov-msg').style.display='flex';
+}
+function openEmbed(url){
+  document.getElementById('embed-frame').src=url;
+  document.getElementById('embed-newtab').href=url;
+  document.getElementById('ov-embed').style.display='flex';
+}
+function sysAlert(msg){ document.getElementById('sys-body').textContent=msg;
+  document.getElementById('ov-sys').style.display='flex'; }
+
+/* ---- 生命 / 結局 ---- */
+function loseLife(){
+  lives--; SFX.defeat(); updateHUD();
+  if(lives<=0){ gameOver(); }
+  else{ player.hp=player.maxHp; player.isHurt=true;player.hurtTimer=40;player.isDead=false;player.setAnim('idle'); sysAlert('損失一條生命！剩餘 '+lives+' 條'); }
+}
+function gameOver(){
+  gameState='over'; if(timerId)clearInterval(timerId);
+  document.getElementById('end-title').textContent='💀 遊戲結束';
+  document.getElementById('end-body').innerHTML=`<div style="line-height:1.7">最終得分：${score}<br>你的能量耗盡了。</div>`;
+  document.getElementById('ov-end').style.display='flex';
+}
+function triggerEnding(){
+  if(endingTriggered)return; endingTriggered=true;
+  gameState='over'; if(timerId)clearInterval(timerId);
+  const r=curRoom;
+  let h=(r.endMedia||[]).map(u=>mediaHTML(u)).join('');
+  if(r.endStory)h+=`<div style="white-space:pre-wrap;line-height:1.7;margin-top:10px">${r.endStory}</div>`;
+  h+=`<div style="margin-top:14px;font-weight:bold">最終得分：${score}</div>`;
+  document.getElementById('end-title').textContent='🎉 '+(r.name||'結局');
+  document.getElementById('end-body').innerHTML=h;
+  document.getElementById('ov-end').style.display='flex';
+  addLog('結局',r.name);
+}
+function checkClearEnding(){
+  if(curRoom&&curRoom.isEnd&&curRoom.endCondition==='clear'){
+    if(enemies.length&&enemies.every(e=>e.isDead)&&!clearedRooms.includes(curRoom.id)){
+      clearedRooms.push(curRoom.id); setTimeout(()=>triggerEnding(),500);
+    }
+  }
+}
+
+/* ---- 紀錄 ---- */
+function addLog(type,detail){logs.push({t:new Date().toLocaleTimeString(),type,detail});}
+
+/* ---- HUD ---- */
+function updateHUD(){
+  document.getElementById('hud-score').textContent='🏆 '+score;
+  document.getElementById('hud-lives').textContent='❤️×'+lives;
+  const hp=player?Math.max(0,Math.ceil(player.hp)):0, mhp=player?player.maxHp:P.playerHp;
+  document.getElementById('hp-fill').style.width=(hp/mhp*100)+'%';
+  document.getElementById('hp-text').textContent=hp+' / '+mhp;
+  const sb=document.getElementById('shield-wrap');
+  if(shieldMax>0){sb.style.display='block';document.getElementById('shield-fill').style.width=(shieldCur/shieldMax*100)+'%';}
+  else sb.style.display='none';
+  let up='';
+  if(attackUp)up+=` ⚡${attackUp}`; if(speedUp)up+=` ▶${speedUp.toFixed(1)}`; if(firerateUp)up+=` ⟳${firerateUp}`;
+  if(defenseUp)up+=` 🛡${defenseUp}`; if(maxhpUp)up+=` ♥${maxhpUp}`; if(regenUp)up+=` ✚${regenUp}`; if(jumpUp)up+=` ↑${jumpUp}`;
+  document.getElementById('hud-up').textContent=up;
+}
+
+/* ---- 計時 ---- */
+function tickTimer(){ if(gameState!=='play')return; timeLeft--; 
+  const m=Math.floor(timeLeft/60),s=timeLeft%60;
+  document.getElementById('hud-timer').textContent='⏳ '+m+':'+String(s).padStart(2,'0');
+  if(timeLeft<=0){ if(timerId)clearInterval(timerId); sysAlert('⏰ 時間到！'); gameOver(); }
+}
+
+/* ---- 主迴圈 ---- */
+function loop(){
+  requestAnimationFrame(loop);
+  if(gameState!=='play'){ justPressed={}; return; }
+  if(!machineOpen){
+    player.update();
+    enemies.forEach(e=>e.update(player));
+    // 子彈
+    projectiles.forEach(p=>{ p.x+=p.vx; p.life--;
+      enemies.forEach(e=>{ if(e.isDead||e.floorOffset!==p.floorOffset)return;
+        if(Math.abs(e.x-p.x)<40&&Math.abs((e.z+60)-p.z)<70){e.hurt(p.dmg,Math.sign(p.vx));p.life=0;} }); });
+    projectiles=projectiles.filter(p=>p.life>0&&p.x>-50&&p.x<ROOM_W+50);
+    particles.forEach(pt=>{pt.x+=pt.vx;pt.y+=pt.vy;pt.vy+=0.4;pt.life--;});
+    particles=particles.filter(pt=>pt.life>0);
+    checkClearEnding();
+    // 出入口自動提示 / 攝影機
+    camera.x=Math.max(0,Math.min(ROOM_W-VIEW_W,player.x-VIEW_W/2));
+    camera.y=-player.floorOffset;
+    if(pickupFlash>0)pickupFlash--;
+  }
+  render();
+  justPressed={};
+}
+function render(){
+  ctx.setTransform(1,0,0,1,0,0);
+  const r=curRoom||{bg:'#111',floor:'#222',accent:'#333'};
+  ctx.fillStyle=r.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+  const sc=canvas.width/VIEW_W; ctx.setTransform(sc,0,0,sc,0,0);
+  // 地板（雙層）
+  drawFloorBand(0); if(r.tall)drawFloorBand(UPPER_RISE);
+  // 物件（下層先畫）
+  const objs=[...(r.objects||[])].sort((a,b)=>((a.floor?1:0)-(b.floor?1:0))||(a.y-b.y));
+  objs.forEach(drawWorldObject);
+  // 樓中樓樓梯提示
+  if(r.tall){const sx=ROOM_W-140-camera.x; ctx.fillStyle='rgba(127,220,255,.15)';
+    ctx.fillRect(sx-65,FLOOR_TOP-camera.y-UPPER_RISE,130,UPPER_RISE+180);
+    ctx.fillStyle='rgba(127,220,255,.7)';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('樓梯 ↑↓',sx,FLOOR_BOT-camera.y-10);ctx.textAlign='left';}
+  // 觸發點
+  (r.triggers||[]).forEach(drawWorldTrigger);
+  // 敵人、玩家、子彈、粒子
+  enemies.filter(e=>e.floorOffset!==player.floorOffset).forEach(e=>e.draw());
+  enemies.filter(e=>e.floorOffset===player.floorOffset).forEach(e=>e.draw());
+  player.draw();
+  projectiles.forEach(p=>{const sx=p.x-camera.x,sy=(FLOOR_BOT-p.floorOffset)-p.z-camera.y;
+    ctx.fillStyle=p.big?'#7fdcff':'#ffe066';ctx.beginPath();ctx.arc(sx,sy,p.big?9:5,0,Math.PI*2);ctx.fill();
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;});
+  particles.forEach(pt=>{ctx.globalAlpha=pt.life/20;ctx.fillStyle=pt.c;
+    ctx.fillRect(pt.x-camera.x-2,pt.y-camera.y-2,4,4);ctx.globalAlpha=1;});
+  // 互動提示
+  const nt=nearestTrigger();
+  if(nt){const sx=nt.x-camera.x,sy=(FLOOR_BOT-(nt.floor?UPPER_RISE:0))-camera.y-110;
+    ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(sx-52,sy-16,104,24);
+    ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('按 X 互動',sx,sy);ctx.textAlign='left';}
+  if(pickupFlash>0){ctx.fillStyle='rgba(255,255,150,'+(pickupFlash/40)+')';ctx.fillRect(0,0,VIEW_W,VIEW_H);}
+}
+function drawFloorBand(off){
+  const r=curRoom;
+  const y0=FLOOR_TOP-off-camera.y, y1=FLOOR_BOT-off-camera.y;
+  ctx.fillStyle=r.floor;ctx.fillRect(-camera.x,y0,ROOM_W,y1-y0);
+  ctx.strokeStyle=r.accent;ctx.lineWidth=2;ctx.strokeRect(-camera.x,y0,ROOM_W,y1-y0);
+}
+function drawWorldObject(o){
+  const off=o.floor?UPPER_RISE:0;
+  const sx=o.x-camera.x, sy=(o.y? (FLOOR_BOT) : FLOOR_BOT) - off - camera.y;
+  const baseY=FLOOR_BOT-off-camera.y;
+  const rc=objRect(o); 
+  const dx=sx-rc.w/2, dy=baseY-rc.h;
+  if(o.src==='builtin'&&propsLoaded&&PROPS[o.prop]){
+    const p=PROPS[o.prop];ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(propsImg,p.x,p.y,p.w,p.h,dx,dy,rc.w,rc.h);
+  }else if(o.src==='custom'){const im=getCustomImg(o.img);
+    if(im.complete&&im.naturalWidth)ctx.drawImage(im,dx,dy,rc.w,rc.h);
+    else{ctx.fillStyle='#4a5568';ctx.fillRect(dx,dy,rc.w,rc.h);} }
+}
+function drawWorldTrigger(t){
+  if(!checkPrereq(t.requires))return;
+  const off=t.floor?UPPER_RISE:0;
+  const sx=t.x-camera.x, sy=FLOOR_BOT-off-camera.y-90;
+  const col={portal:'#4dabf7',info:'#69db7c',embed:'#ffd43b',check:'#ff922b',interact:'#da77f2',machine:'#9775fa'}[t.type];
+  const ic={portal:'⬆️',info:'ℹ️',embed:'🔗',check:'❓',interact:'💬',machine:'⚗️'}[t.type];
+  // 盲搜模式不畫指引光柱
+  if(!P.blindSearch){ctx.fillStyle=col+'33';ctx.fillRect(sx-3,FLOOR_TOP-off-camera.y,6,FLOOR_BOT-FLOOR_TOP);}
+  ctx.beginPath();ctx.arc(sx,sy,15,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  ctx.font='15px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(ic,sx,sy+1);ctx.textBaseline='alphabetic';ctx.textAlign='left';
+}
+
+/* ---- 輸入 ---- */
+window.addEventListener('keydown',e=>{ if(!keys[e.code])justPressed[e.code]=true; keys[e.code]=true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+  if(e.code==='KeyX'&&gameState==='play'&&!machineOpen)doTriggerInteract();
+});
+window.addEventListener('keyup',e=>{keys[e.code]=false;});
+
+/* ---- 開始 / 重新開始 ---- */
+function startGame(){
+  const name=document.getElementById('player-name').value.trim();
+  if(!name)return sysAlert('請輸入玩家暱稱');
+  if(P.passcode&&document.getElementById('passcode').value!==P.passcode)return sysAlert('通行碼錯誤');
+  document.getElementById('start-screen').style.display='none';
+  gameState='play';
+  if(P.backpackEnabled){document.getElementById('bp-btn').style.display='flex';
+    P.items.forEach(it=>{if(it.isStarter&&!inventory.includes(it.id))inventory.push(it.id);});}
+  if(P.timeLimitEnabled){document.getElementById('hud-timer').style.display='inline-block';timerId=setInterval(tickTimer,1000);}
+  const startId=Object.values(P.rooms).find(r=>r.isStart)?.id||Object.keys(P.rooms)[0];
+  loadRoom(startId,null);
+  updateHUD();
+}
+function restartGame(){ location.reload(); }
+function resizeCanvas(){const w=document.getElementById('game-viewer');
+  const ratio=VIEW_W/VIEW_H; let cw=w.clientWidth,ch=w.clientHeight;
+  if(cw/ch>ratio)cw=ch*ratio; else ch=cw/ratio;
+  canvas.style.width=cw+'px';canvas.style.height=ch+'px';
+  canvas.width=VIEW_W;canvas.height=VIEW_H;}
+window.addEventListener('resize',resizeCanvas);
+resizeCanvas(); loop();
+</script>
+<script>
+/* ==================================================================
+   遊戲產生 / 試玩 / 匯出 ZIP
+   ================================================================== */
+
+/* 主題色（移植自 Exploration 的 15 種主題，取代表面色） */
+const THEME_VARS={
+  default:'--primary:#6a3d9a;--accent:#20c997;--bg:#f4ecff;',
+  blue:'--primary:#0f4c81;--accent:#0ea5e9;--bg:#eaf4fb;',
+  green:'--primary:#2b8a3e;--accent:#40c057;--bg:#ebfbee;',
+  red:'--primary:#c1121f;--accent:#ff6b6b;--bg:#fff0f0;',
+  dark:'--primary:#1f2933;--accent:#7fdcff;--bg:#0f1620;--text:#e5e7eb;',
+  ink:'--primary:#2b2b2b;--accent:#8a6d3b;--bg:#f5f1e6;',
+  mountain:'--primary:#33566b;--accent:#7fa8b8;--bg:#eef3f5;',
+  rouge:'--primary:#a63a5b;--accent:#f2a2b8;--bg:#fdf0f4;',
+  morandi:'--primary:#7d8471;--accent:#a3a692;--bg:#f2f1ec;',
+  indigo:'--primary:#283a6b;--accent:#5c7cfa;--bg:#eef0fb;',
+  ocean:'--primary:#0b525b;--accent:#22d3ee;--bg:#e8f6f8;',
+  sunset:'--primary:#c44536;--accent:#ff9f43;--bg:#fff3e8;',
+  sakuranight:'--primary:#5a3d7a;--accent:#e991c8;--bg:#f3ebf7;',
+  matcha:'--primary:#5a7d4f;--accent:#a3c585;--bg:#f0f5ea;',
+  amber:'--primary:#7a4f1d;--accent:#d99a2b;--bg:#f9f0e0;',
+};
+
+function buildGameHTML(isPreview){
+  const name=(gameData.gameName||document.getElementById('game-name').value||'ACTGame').trim();
+  gameData.gameName=name;
+  // 組 payload（去除 _img 等執行期欄位），附上機台表與 props
+  const payload=JSON.parse(JSON.stringify(gameData,(k,v)=>k==='_img'?undefined:v));
+  payload.isPreview=isPreview;
+  payload.MACHINES=MACHINES;
+  const tv=THEME_VARS[gameData.themeColor]||THEME_VARS.default;
+
+  const raw1=document.getElementById('raw-runtime').textContent;
+  const raw2=document.getElementById('raw-runtime-2').textContent;
+  const RAWJS=raw1+"\n"+raw2;
+  const obf=btoa(unescape(encodeURIComponent(RAWJS)));
+
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>${name}</title>
+<style>
+:root{${tv} --text:${gameData.themeColor==='dark'?'#e5e7eb':'#222'};--panel:#fff;--border:#ddd;}
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:#000;color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#start-screen{position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.start-bg{position:absolute;inset:-8%;background-size:cover;background-position:center;opacity:.45;animation:zoom 20s linear infinite alternate}
+@keyframes zoom{from{transform:scale(1)}to{transform:scale(1.12)}}
+.start-content{position:relative;z-index:1;text-align:center;color:#fff;padding:0 20px}
+.start-editor{color:var(--accent);font-weight:bold;letter-spacing:1px;margin-bottom:6px;text-shadow:0 2px 4px rgba(0,0,0,.8)}
+.start-title{font-size:3.6em;font-weight:900;margin:0;line-height:1.1;text-shadow:0 5px 18px rgba(0,0,0,.9)}
+.start-sub{color:#ccc;font-size:1.1em;margin:10px 0 30px;letter-spacing:1px}
+.start-in{background:#fff;color:#000;border:2px solid rgba(255,255,255,.5);border-radius:10px;padding:11px 15px;font-size:1.05em;font-weight:bold;text-align:center;width:260px;margin-bottom:12px}
+.btn-play{background:linear-gradient(45deg,var(--accent),#20c997);color:#fff;border:none;padding:14px 46px;border-radius:50px;font-size:1.4em;font-weight:bold;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.4);letter-spacing:2px;animation:pulse 2s infinite}
+@keyframes pulse{0%{transform:scale(1)}70%{transform:scale(1.04)}100%{transform:scale(1)}}
+.start-footer{position:absolute;bottom:24px;width:100%;text-align:center;color:rgba(255,255,255,.9);font-size:.8em;z-index:1}
+.start-footer img{height:46px;border-radius:8px;border:1px solid rgba(255,255,255,.5)}
+.game-header{background:#0a2540;color:#ccc;font-size:.72em;padding:4px 14px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.game-header b{color:#fff;font-size:1.5em}
+.top-bar{background:var(--primary);color:#fff;padding:7px 12px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.hp-bar{flex:1;max-width:220px;height:20px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.6);border-radius:6px;overflow:hidden;position:relative}
+.hp-fill{height:100%;background:linear-gradient(180deg,#ff6b6b,#c0392b);transition:width .3s}
+.hp-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;text-shadow:0 1px 2px #000}
+#shield-wrap{flex:1;max-width:220px;height:7px;background:rgba(0,0,0,.4);border-radius:4px;overflow:hidden;display:none}
+#shield-fill{height:100%;background:linear-gradient(90deg,#67e8f9,#a5f3fc);transition:width .3s}
+#hud-timer{font-weight:900;font-size:1.2em;display:none}
+.hud-item{font-weight:800;font-size:1.1em;white-space:nowrap}
+#game-viewer{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#game-canvas{display:block;image-rendering:pixelated;background:#111}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:none;justify-content:center;align-items:center;padding:20px}
+.modal{background:var(--panel);color:var(--text);border-radius:12px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;padding:20px}
+.modal h2,.modal h3{color:var(--primary);margin-top:0}
+.btn-act{background:var(--accent);color:#fff;border:none;padding:11px;border-radius:8px;font-size:1.05em;font-weight:bold;width:100%;margin-top:12px;cursor:pointer}
+.btn-cancel{background:#6c757d}
+.opt-btn{display:block;width:100%;background:var(--bg);color:var(--text);border:2px solid var(--primary);padding:11px;border-radius:8px;font-weight:bold;cursor:pointer;text-align:left;margin-bottom:8px;text-decoration:none}
+.opt-btn:hover{background:var(--primary);color:#fff}
+#machine-ov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;display:none;flex-direction:column;padding:20px}
+#machine-bar{background:var(--primary);color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:10px 10px 0 0}
+#machine-frame{flex:1;width:100%;border:none;background:#0b1120;border-radius:0 0 10px 10px}
+#bp-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--primary);color:#fff;font-size:28px;display:none;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4);border:3px solid #fff;cursor:pointer;z-index:900}
+#check-ans{width:100%;padding:11px;border:2px solid var(--border);border-radius:8px;font-size:1em;margin:8px 0}
+#trans{position:fixed;inset:0;pointer-events:none;z-index:1500;opacity:0;background:#000}
+#embed-frame{width:100%;height:70vh;border:none;border-radius:8px;background:#fff}
+.ctrl-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:5px 12px;border-radius:12px;pointer-events:none;z-index:20}
+</style></head>
+<body>
+<audio id="bgm" loop style="display:none"></audio>
+<div id="start-screen">
+  <div class="start-bg" style="background-image:url('${gameData.startBgImg||''}')"></div>
+  <div class="start-content">
+    <div class="start-editor">NTUSTMEG ACTGame Maker</div>
+    <h1 class="start-title">${name}</h1>
+    <div class="start-sub">${gameData.startSubtitle||''}</div>
+    ${gameData.passcode?'<input type="text" id="passcode" class="start-in" placeholder="請輸入通行碼">':'<input type="hidden" id="passcode">'}
+    <input type="text" id="player-name" class="start-in" placeholder="請輸入玩家暱稱 (最長6字)" maxlength="6"><br>
+    <button class="btn-play" onclick="startGame()">開始遊戲</button>
+    ${gameData.designer?`<div style="margin-top:14px;color:#cbd5e1;font-size:.9em">設計者：${gameData.designer}</div>`:''}
+  </div>
+  <div class="start-footer">
+    <a href="https://sites.google.com/view/hthou" target="_blank"><img src="https://i.ibb.co/HLhqbPxD/unnamed.png" alt="Logo"></a>
+    <div>此遊戲由 NTUSTMEG ACTGame Maker 製作 · (C) 2026 Copyright by NTUSTMEG</div>
+  </div>
+</div>
+
+<div class="game-header">
+  <span>NTUSTMEG ACTGame Maker</span><b>${name}</b>
+</div>
+<div class="top-bar">
+  <span id="hud-timer">⏳ --:--</span>
+  <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div><div class="hp-text" id="hp-text">100/100</div></div>
+  <div id="shield-wrap"><div id="shield-fill"></div></div>
+  <span class="hud-item" id="hud-lives">❤️×3</span>
+  <span class="hud-item" id="hud-score">🏆 0</span>
+  <span class="hud-item" id="hud-up" style="font-size:.8em;color:#a7f3d0"></span>
+</div>
+
+<div id="game-viewer">
+  <canvas id="game-canvas" width="800" height="450"></canvas>
+  <div class="ctrl-hint">← → / A D 移動 · 空白鍵跳 · Z 射擊${gameData.weapon==='blaster'?' · C 蓄力':''} · X 互動/出入口</div>
+</div>
+<div id="bp-btn" onclick="openBackpack()">🎒</div>
+
+<div id="trans"></div>
+
+<!-- 機台 -->
+<div id="machine-ov">
+  <div id="machine-bar"><span id="machine-title"></span>
+    <button class="btn-act" style="width:auto;margin:0;padding:6px 16px;background:rgba(0,0,0,.3)" onclick="closeMachine()">關閉 (X)</button></div>
+  <iframe id="machine-frame"></iframe>
+</div>
+
+<!-- 訊息/故事 -->
+<div class="ov" id="ov-msg"><div class="modal"><h2 id="msg-title">訊息</h2>
+  <div id="msg-body" style="max-height:60vh;overflow-y:auto"></div>
+  <button class="btn-act" onclick="document.getElementById('ov-msg').style.display='none'">確定</button></div></div>
+
+<!-- 檢驗 -->
+<div class="ov" id="ov-check"><div class="modal"><h2>❓ 檢驗任務</h2>
+  <div id="check-media" style="display:none;max-height:260px;overflow-y:auto;margin-bottom:10px"></div>
+  <p id="check-q" style="font-weight:bold"></p>
+  <input type="text" id="check-ans" placeholder="請輸入答案...">
+  <button class="btn-act" onclick="submitCheck()">送出解答</button>
+  <button class="btn-act" id="check-hint-btn" style="background:#17a2b8;display:none" onclick="showCheckHint()">💡 顯示提示</button>
+  <button class="btn-act btn-cancel" onclick="document.getElementById('ov-check').style.display='none'">取消</button></div></div>
+
+<!-- 互動 -->
+<div class="ov" id="ov-interact"><div class="modal">
+  <div id="interact-media" style="display:none;max-height:40vh;overflow-y:auto;margin-bottom:10px"></div>
+  <h2 id="interact-title"></h2>
+  <div id="interact-desc" style="white-space:pre-wrap;line-height:1.6;margin-bottom:16px"></div>
+  <div id="interact-options"></div>
+  <button class="btn-act btn-cancel" onclick="document.getElementById('ov-interact').style.display='none'">離開</button></div></div>
+
+<!-- 嵌入 -->
+<div class="ov" id="ov-embed"><div class="modal" style="max-width:960px">
+  <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+    <a id="embed-newtab" href="#" target="_blank" style="color:var(--accent)">🔗 在新分頁開啟</a>
+    <button class="btn-act" style="width:auto;margin:0;padding:5px 14px;background:#6c757d" onclick="document.getElementById('ov-embed').style.display='none';document.getElementById('embed-frame').src=''">關閉</button></div>
+  <iframe id="embed-frame"></iframe></div></div>
+
+<!-- 道具獲得 -->
+<div class="ov" id="ov-acq"><div class="modal" style="max-width:320px;text-align:center">
+  <h2 style="color:#ff9800">🎉 獲得新道具！</h2>
+  <img id="acq-img" style="width:130px;height:130px;object-fit:cover;border-radius:12px;margin:12px auto;display:block;background:#eee">
+  <h3 id="acq-name"></h3>
+  <button class="btn-act" onclick="document.getElementById('ov-acq').style.display='none'">放入背包</button></div></div>
+
+<!-- 背包 -->
+<div class="ov" id="ov-backpack"><div class="modal" style="text-align:center">
+  <h2>🎒 道具背包</h2><div id="bp-list"></div>
+  <button class="btn-act btn-cancel" onclick="document.getElementById('ov-backpack').style.display='none'">關閉</button></div></div>
+
+<!-- 系統 -->
+<div class="ov" id="ov-sys" style="z-index:3000"><div class="modal" style="max-width:340px;text-align:center">
+  <p id="sys-body" style="font-size:1.1em;line-height:1.6;white-space:pre-wrap"></p>
+  <button class="btn-act" onclick="document.getElementById('ov-sys').style.display='none'">確定</button></div></div>
+
+<!-- 結局 -->
+<div class="ov" id="ov-end" style="z-index:4000"><div class="modal" style="text-align:center">
+  <h2 id="end-title">結局</h2><div id="end-body"></div>
+  <button class="btn-act" onclick="restartGame()">🔄 重新開始</button></div></div>
+
+<script>
+window.__PAYLOAD__=${JSON.stringify(payload)};
+window.__PROPS__=${JSON.stringify(PROPS)};
+window.__PROP_SCALES__=${JSON.stringify(PROP_SCALES_RUNTIME)};
+function openBackpack(){var box=document.getElementById('bp-list');box.innerHTML='';
+  if(!inventory.length){box.innerHTML='<p style="color:#888">背包是空的</p>';}
+  else inventory.forEach(function(id){var it=window.__PAYLOAD__.items.find(function(i){return i.id===id;});if(!it)return;
+    box.innerHTML+='<div style="display:flex;gap:12px;align-items:center;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px"><img src="'+(it.img||'https://placehold.co/50')+'" style="width:50px;height:50px;border-radius:6px;object-fit:cover"><div style="text-align:left"><b>'+it.name+'</b><br><small>'+(it.desc||'')+'</small></div></div>';});
+  document.getElementById('ov-backpack').style.display='flex';}
+<\/script>
+<script>eval(decodeURIComponent(escape(atob('${obf}'))));<\/script>
+</body></html>`;
+}
+
+/* props 縮放表（供 runtime；與原遊戲一致） */
+const PROP_SCALES_RUNTIME={"desk_console":1.186,"desk_pipe":0.969,"desk_terminal":0.945,"desk_dualmon":1.135,"monitor":0.698,"monitor_wide":0.691,"tri_monitor":0.659,"hologram_s":0.688,"hologram_m":0.891,"hologram_l":0.887,"L_desk":0.797,"arch_desk":0.911,"stool":0.884,"stool2":0.84,"chair_back":1.074,"keyboard":0.154,"keyboard2":0.143,"tablet":0.053,"tablet2":0.033,"laptop_a":0.296,"laptop_b":0.256,"drive":0.163,"chair_front":0.898,"chair_side":0.967,"laptop_c":0.278,"laptop_d":0.291,"laptop_e":0.278,"laptop_f":0.274,"laptop_flat":0.134,"server_tall":0.785,"server_lit":0.816,"server_rack":0.838,"server_box":0.777,"server_open":0.759,"server_cabinet":0.767,"control_desk":0.971,"control_desk2":1.039,"microscope":0.419,"microscope2":0.473,"centrifuge":0.353,"centrifuge2":0.446,"incubator":1.219,"washer":1.06,"tank_a":1.255,"tank_lit_a":1.467,"tank_b":1.2,"tank_lit_b":1.467,"robot_arm_a":1.143,"robot_arm_b":1.001,"pipes_big":1.582,"pipes_small":1.259,"gas_pair":1.189,"gas_tanks":1.135,"gas_tanks2":1.19,"vial_rack":0.351,"vial_carousel":0.32,"petri":0.11,"petri_stack":0.184,"flask_pair":0.413,"flask_pair2":0.429,"trash":0.656,"trash_open":0.684,"door_slide_a":0.784,"door_slide_b":0.784,"door_arch":0.824,"door_elevator":1.148};
+
+/* ---- 試玩 ---- */
+function previewGame(){
+  if(!Object.keys(gameData.rooms).length)return sysAlert('請先建立至少一個房間。');
+  if(!Object.values(gameData.rooms).some(r=>r.isStart))return sysAlert('請先在房間設定中標記一個「起始房間」。');
+  const html=buildGameHTML(true);
+  const frame=document.getElementById('preview-frame');
+  frame.srcdoc=html;
+  document.getElementById('preview-overlay').style.display='flex';
+}
+function closePreview(){
+  document.getElementById('preview-overlay').style.display='none';
+  document.getElementById('preview-frame').srcdoc='';
+}
+
+/* ---- 匯出 ZIP（含機台、精靈圖等相關檔案） ---- */
+function loadJSZip(){
+  return new Promise((resolve,reject)=>{
+    if(window.JSZip)return resolve(window.JSZip);
+    const urls=['https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+                'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+                'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'];
+    let i=0;
+    (function tryLoad(){
+      if(i>=urls.length)return reject(new Error('JSZip 載入失敗'));
+      const s=document.createElement('script');s.src=urls[i++];
+      s.onload=()=>resolve(window.JSZip); s.onerror=tryLoad;
+      document.head.appendChild(s);
+    })();
+  });
+}
+async function fetchAsBlob(url){ const r=await fetch(url); if(!r.ok)throw new Error(url); return await r.blob(); }
+
+async function exportGameZip(){
+  if(!Object.keys(gameData.rooms).length)return sysAlert('請先建立至少一個房間。');
+  if(!Object.values(gameData.rooms).some(r=>r.isStart))return sysAlert('請先標記一個「起始房間」。');
+  sysAlert('正在打包遊戲與相關檔案，請稍候…');
+  try{
+    const JSZip=await loadJSZip();
+    const zip=new JSZip();
+    const name=(gameData.gameName||'ACTGame').trim();
+    // 1. 主遊戲 HTML
+    zip.file('index.html', buildGameHTML(false));
+    // 2. 專案原始檔（可重新匯入編輯）
+    const clean=JSON.parse(JSON.stringify(gameData,(k,v)=>k==='_img'?undefined:v));
+    zip.file('ACT_'+name+'.txt', JSON.stringify(clean,null,2));
+    // 3. 需打包的相關檔案：精靈圖、物件圖、物件清單、機台框架、8 台機台
+    const assets=['NEWC.png','ROBOT.png','props2.png','props2.json','instrument.js',
+      'sim_optics.html','sim_mechanics.html','sim_circuit.html','sim_lever.html',
+      'sim_density.html','sim_ohms.html','sim_titration.html','sim_lens.html'];
+    let ok=0, miss=[];
+    for(const a of assets){
+      try{ const b=await fetchAsBlob(a); zip.file(a,b); ok++; }
+      catch(e){ miss.push(a); }
+    }
+    // 4. 使用說明
+    zip.file('README.txt',
+`NTUSTMEG ACTGame Maker — 匯出遊戲包
+====================================
+遊戲名稱：${name}
+
+【如何遊玩】
+1. 將本資料夾所有檔案「保持在同一層」解壓縮。
+2. 因遊戲會載入機台(iframe)與圖片，請用本機伺服器開啟：
+   在此資料夾執行： python3 -m http.server
+   然後瀏覽器開啟： http://localhost:8000/index.html
+   （直接雙擊 index.html 可能因瀏覽器安全限制無法載入機台）
+3. 或將整個資料夾上傳到任何網頁空間 (GitHub Pages / Google Sites 等)。
+
+【檔案清單】
+- index.html ............ 遊戲主程式
+- ACT_${name}.txt ....... 專案原始檔（可再匯入編輯器修改）
+- NEWC.png / ROBOT.png .. 玩家與敵人精靈圖
+- props2.png / .json .... 物件圖庫與座標
+- instrument.js ......... 機台共用框架（務必與機台同層）
+- sim_*.html ............ 8 台國中理化模擬機台
+
+操作：方向鍵/AD 移動、空白鍵跳、Z 射擊、C 蓄力(光束槍)、X 互動或進出入口。
+
+(C) 2026 NTUSTMEG`);
+
+    const blob=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='ACTGame_'+name+'.zip'; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    document.getElementById('ov-sys')&&(document.getElementById('sys-body')&& (0));
+    setTimeout(()=>{
+      sysAlert('✅ 匯出完成！已打包 '+ok+' 個相關檔案。'+
+        (miss.length?('\n\n⚠️ 找不到：'+miss.join(', ')+'\n請確認這些檔案與編輯器在同一資料夾，並用本機伺服器開啟後再匯出。'):'')+
+        '\n\n解壓後請用本機伺服器開啟 index.html（詳見 README）。');
+    },300);
+  }catch(e){
+    sysAlert('匯出失敗：'+e.message+'\n可能是無法載入 JSZip（需連線）或找不到相關檔案。');
+  }
+}
+</script>
+</body></html>

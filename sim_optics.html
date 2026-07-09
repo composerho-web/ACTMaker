@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>光學校準模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 光學校準模擬儀 · 108課綱 Kc-Ⅳ 光的反射 ===== */
+const COLS=8, ROWS=5;
+const SRC={c:0,r:2,dir:'R'}, SENSOR={c:7,r:2};
+const POS=[[2,2],[2,0],[5,0],[5,2]];
+
+const ui=buildInstrument({
+  title:'光學校準模擬儀',
+  tag:'Kc-Ⅳ 光的反射',
+  brief:'點擊鏡片切換斜向，然後提交驗證',
+  readouts:[
+    {id:'ro_hits', label:'反射次數'},
+    {id:'ro_exit', label:'光束出口'},
+    {id:'ro_len',  label:'光路長度'},
+    {id:'ro_state',label:'連通狀態'},
+  ],
+  views:[
+    {id:'beam', label:'光路'},
+    {id:'rule', label:'反射規則'},
+  ],
+  deckHTML:
+    `<button class="btn ghost" id="flipAll">⟲ 全部翻轉</button>` +
+    `<button class="btn ghost" id="stepBtn">▷ 逐段追蹤</button>` +
+    toggle('tg_grid','顯示座標',true) +
+    toggle('tg_arrow','顯示行進方向',true)
+});
+const cv=ui.cv, ctx=cv.getContext('2d');
+const hintLog=makeHintLog(ui);
+const cap=makeCap(ui,()=>{ui.status.textContent='此機台強化已達上限，仍可自由練習';ui.status.className='hint';});
+const views=makeViews(ui,()=>draw());
+const showGrid=wireToggle('tg_grid',()=>draw());
+const showArrow=wireToggle('tg_arrow',()=>draw());
+
+let W,H,cell,mirrors=[],solved=false,applied=false,failCount=0;
+let stepMode=false, stepIdx=0, stepTimer=null;
+
+function initMirrors(){ mirrors=[{c:2,r:2,type:'\\'},{c:2,r:0,type:'/'},{c:5,r:0,type:'/'},{c:5,r:2,type:'\\'}]; }
+function mirrorAt(c,r){return mirrors.find(m=>m.c===c&&m.r===r);}
+
+function trace(){
+  const path=[{c:SRC.c,r:SRC.r,dir:SRC.dir}];
+  let c=SRC.c,r=SRC.r,dir=SRC.dir,steps=0;const hit=[];
+  while(steps++<60){
+    if(dir==='R')c++;else if(dir==='L')c--;else if(dir==='U')r--;else if(dir==='D')r++;
+    if(c<0||c>=COLS||r<0||r>=ROWS){
+      const side=c<0?'左':(c>=COLS?'右':(r<0?'上':'下'));
+      return {reached:false,path,hit,exitSide:side};
+    }
+    path.push({c,r,dir});
+    if(c===SENSOR.c&&r===SENSOR.r) return {reached:true,path,hit};
+    const m=mirrorAt(c,r);
+    if(m){ hit.push(m);
+      dir=(m.type==='/')?{R:'U',U:'R',L:'D',D:'L'}[dir]:{R:'D',D:'R',L:'U',U:'L'}[dir];
+      path[path.length-1].dir=dir; }
+  }
+  return {reached:false,path,hit,exitSide:'原地循環'};
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;
+  cell=Math.min(W/(COLS+1.5),H/(ROWS+1.5));draw();}
+window.addEventListener('resize',resize);
+function cellCenter(c,r){const ox=(W-COLS*cell)/2,oy=(H-ROWS*cell)/2;
+  return{x:ox+c*cell+cell/2,y:oy+r*cell+cell/2};}
+
+function updateRO(){
+  const res=trace();
+  setRO('ro_hits', `${res.hit.length} 次`, 'violet');
+  setRO('ro_exit', res.reached?'—（已抵達）':res.exitSide, res.reached?'green':'red');
+  setRO('ro_len', `${res.path.length} 格`);
+  setRO('ro_state', res.reached?'✓ 已連通':'✗ 未連通', res.reached?'green':'red');
+}
+function progressiveHint(res){
+  const n=failCount,nHit=res.hit.length;
+  if(n<2)return;
+  let lv,msg;
+  if(n===2){lv=1;
+    msg=`先觀察光路往哪裡跑——目前光束從「${res.exitSide}」邊界離開。`
+      + `想一想：光碰到一面斜鏡時，行進方向會被轉 90 度。轉去哪一邊，由鏡子的斜向決定。`
+      + `<br><span style="opacity:.8">可切換「反射規則」檢視，或開啟「顯示行進方向」看箭頭。</span>`;
+  } else if(n===3){lv=2;
+    msg = nHit===0
+      ? `光束一片鏡子都沒碰到就離開了。光源在左邊、向右直射，代表它只會經過「和光源同一列」的格子。檢查那條路徑上有沒有鏡子擋著。`
+      : `光束成功轉了 ${nHit} 次，在第 ${nHit} 片鏡子之後偏離目標。把注意力集中在「第 ${nHit} 片鏡子」：`
+        + `一片鏡子只有 ╱ 和 ╲ 兩種斜向，它們會把同一道光反射到相反的兩邊。試著只切換這一片，看光路如何改變。`;
+  } else {lv=3;
+    const rule=`╱ 會把「向右」的光轉為「向上」、把「向下」的光轉為「向左」；`
+             + `╲ 會把「向右」的光轉為「向下」、把「向上」的光轉為「向左」。`;
+    msg = nHit===0
+      ? `反射規則——${rule} 光源向右直射，所以第一片能作用的鏡子，必須落在光源所在的那一列上。`
+      : `反射規則——${rule} 目前光在第 ${nHit} 片鏡子轉錯邊。試著「從終點倒推」：`
+        + `感測器在右側中間，光必須「向右」才能射入它；那麼前一片鏡子該把光轉成向右？`
+        + `而要被轉成向右，光進入那片鏡子時又該是往哪個方向？`;
+  }
+  hintLog.add(lv,n,msg);
+}
+
+function draw(){ if(!W)return; ctx.clearRect(0,0,W,H);
+  if(views.current==='rule'){drawRule();return;}
+  drawBeam(); }
+
+function drawBeam(){
+  const res=trace();
+  // 網格
+  for(let c=0;c<COLS;c++)for(let r=0;r<ROWS;r++){
+    const p=cellCenter(c,r);
+    ctx.strokeStyle='rgba(127,220,255,0.10)';ctx.lineWidth=1;
+    ctx.strokeRect(p.x-cell/2,p.y-cell/2,cell,cell);
+    if(showGrid()){ctx.fillStyle='rgba(139,167,196,0.35)';ctx.font=`${cell*0.16}px monospace`;
+      ctx.textAlign='left';ctx.fillText(`${c},${r}`,p.x-cell/2+3,p.y-cell/2+cell*0.2);}
+  }
+  // 光路（逐段模式只畫到 stepIdx）
+  const lim = stepMode ? Math.min(stepIdx, res.path.length) : res.path.length;
+  if(lim>1){
+    ctx.strokeStyle=res.reached?'rgba(126,220,255,0.95)':'rgba(245,158,11,0.8)';
+    ctx.lineWidth=4;ctx.shadowColor=res.reached?'#7fdcff':'#f59e0b';ctx.shadowBlur=12;
+    ctx.beginPath();
+    const p0=cellCenter(res.path[0].c,res.path[0].r);ctx.moveTo(p0.x,p0.y);
+    for(let i=1;i<lim;i++){const p=cellCenter(res.path[i].c,res.path[i].r);ctx.lineTo(p.x,p.y);}
+    ctx.stroke();ctx.shadowBlur=0;
+    // 行進方向箭頭
+    if(showArrow()){
+      for(let i=1;i<lim;i+=2){
+        const p=cellCenter(res.path[i].c,res.path[i].r),d=res.path[i].dir;
+        const dv={R:[1,0],L:[-1,0],U:[0,-1],D:[0,1]}[d];
+        ctx.fillStyle='rgba(255,255,255,0.75)';
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(Math.atan2(dv[1],dv[0]));
+        ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(-4,-4);ctx.lineTo(-4,4);ctx.closePath();ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+  // 光源
+  const s=cellCenter(SRC.c,SRC.r);
+  ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.arc(s.x,s.y,cell*0.17,0,Math.PI*2);ctx.fill();
+  ctx.shadowColor='#f59e0b';ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#fde68a';ctx.font=`${cell*0.2}px sans-serif`;ctx.textAlign='center';
+  ctx.fillText('光源',s.x,s.y-cell*0.32);
+  // 感測器
+  const t=cellCenter(SENSOR.c,SENSOR.r);
+  ctx.strokeStyle=res.reached?'#4ade80':'#64748b';ctx.lineWidth=3;
+  ctx.strokeRect(t.x-cell*0.22,t.y-cell*0.22,cell*0.44,cell*0.44);
+  if(res.reached){ctx.fillStyle='rgba(74,222,128,0.3)';ctx.fillRect(t.x-cell*0.22,t.y-cell*0.22,cell*0.44,cell*0.44);}
+  ctx.fillStyle=res.reached?'#4ade80':'#94a3b8';ctx.fillText('感測器',t.x,t.y+cell*0.42);
+  // 鏡片
+  mirrors.forEach((m,i)=>{
+    const p=cellCenter(m.c,m.r);
+    ctx.strokeStyle='#cbd5e1';ctx.lineWidth=Math.max(4,cell*0.085);ctx.lineCap='round';
+    ctx.beginPath();
+    if(m.type==='/'){ctx.moveTo(p.x-cell*0.3,p.y+cell*0.3);ctx.lineTo(p.x+cell*0.3,p.y-cell*0.3);}
+    else{ctx.moveTo(p.x-cell*0.3,p.y-cell*0.3);ctx.lineTo(p.x+cell*0.3,p.y+cell*0.3);}
+    ctx.stroke();
+    ctx.strokeStyle='rgba(127,220,255,0.28)';ctx.lineWidth=1;
+    ctx.strokeRect(p.x-cell*0.4,p.y-cell*0.4,cell*0.8,cell*0.8);
+    // 鏡片編號（依光束打到的順序）
+    const order=res.hit.findIndex(h=>h.c===m.c&&h.r===m.r);
+    ctx.fillStyle=order>=0?'#7fdcff':'rgba(139,167,196,0.5)';
+    ctx.font=`bold ${cell*0.18}px sans-serif`;ctx.textAlign='center';
+    ctx.fillText(order>=0?`第${order+1}片`:'未經過',p.x,p.y+cell*0.36);
+  });
+  ctx.textAlign='left';
+}
+function drawRule(){
+  ctx.fillStyle='#7fdcff';ctx.font='15px sans-serif';ctx.textAlign='center';
+  ctx.fillText('平面鏡反射：入射角 = 反射角（此處鏡面斜 45°，光轉 90°）',W/2,30);
+  const cases=[
+    {t:'/',in:'R',out:'U'},{t:'/',in:'D',out:'L'},
+    {t:'\\',in:'R',out:'D'},{t:'\\',in:'U',out:'L'},
+  ];
+  const bw=W/4, by=H*0.5, s=Math.min(bw*0.32,58);
+  cases.forEach((cs,i)=>{
+    const cx=bw*(i+0.5);
+    ctx.strokeStyle='#cbd5e1';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();
+    if(cs.t==='/'){ctx.moveTo(cx-s*0.6,by+s*0.6);ctx.lineTo(cx+s*0.6,by-s*0.6);}
+    else{ctx.moveTo(cx-s*0.6,by-s*0.6);ctx.lineTo(cx+s*0.6,by+s*0.6);}
+    ctx.stroke();
+    const dv={R:[1,0],L:[-1,0],U:[0,-1],D:[0,1]};
+    const iv=dv[cs.in], ov=dv[cs.out];
+    // 入射（朝鏡子）
+    ar(cx-iv[0]*s*1.5, by-iv[1]*s*1.5, iv[0]*s*0.9, iv[1]*s*0.9, '#f59e0b');
+    // 反射（離開鏡子）
+    ar(cx, by, ov[0]*s*1.3, ov[1]*s*1.3, '#7fdcff');
+    ctx.fillStyle='#cbd5e1';ctx.font='13px sans-serif';ctx.textAlign='center';
+    ctx.fillText(`鏡 ${cs.t==='/'?'╱':'╲'}`,cx,by+s*1.7);
+    const nm={R:'向右',L:'向左',U:'向上',D:'向下'};
+    ctx.fillStyle='#94a3b8';ctx.font='11.5px sans-serif';
+    ctx.fillText(`${nm[cs.in]} → ${nm[cs.out]}`,cx,by+s*1.7+18);
+  });
+  ctx.fillStyle='#8ba7c4';ctx.font='12px sans-serif';
+  ctx.fillText('提示：從感測器倒推——光要「向右」才能射入它。',W/2,H-18);
+  ctx.textAlign='left';
+}
+function ar(x,y,dx,dy,col){
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx,y+dy);ctx.stroke();
+  const a=Math.atan2(dy,dx);
+  ctx.beginPath();ctx.moveTo(x+dx,y+dy);
+  ctx.lineTo(x+dx-8*Math.cos(a-0.4),y+dy-8*Math.sin(a-0.4));
+  ctx.lineTo(x+dx-8*Math.cos(a+0.4),y+dy-8*Math.sin(a+0.4));
+  ctx.closePath();ctx.fill();
+}
+
+cv.addEventListener('click',e=>{
+  if(applied||views.current!=='beam')return;
+  const rect=cv.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  for(const m of mirrors){
+    const p=cellCenter(m.c,m.r);
+    if(Math.abs(mx-p.x)<cell*0.45&&Math.abs(my-p.y)<cell*0.45){
+      m.type=m.type==='/'?'\\':'/';
+      solved=false; if(!cap.full) ui.apply.disabled=true;
+      stepMode=false;
+      ui.status.textContent='已調整鏡片 — 按「提交驗證」檢查';ui.status.className='hint';
+      updateRO();draw();return;
+    }
+  }
+});
+document.getElementById('flipAll').onclick=()=>{
+  if(applied)return;
+  mirrors.forEach(m=>m.type=m.type==='/'?'\\':'/');
+  solved=false;if(!cap.full)ui.apply.disabled=true;updateRO();draw();
+};
+document.getElementById('stepBtn').onclick=()=>{
+  const res=trace();
+  stepMode=true;stepIdx=1;
+  if(stepTimer)clearInterval(stepTimer);
+  stepTimer=setInterval(()=>{
+    stepIdx++;
+    if(stepIdx>res.path.length){clearInterval(stepTimer);stepMode=false;}
+    draw();
+  },110);
+};
+ui.submit.onclick=()=>{
+  if(applied)return;
+  stepMode=false;
+  const res=trace();updateRO();draw();
+  if(res.reached){
+    solved=true;
+    ui.status.textContent='✓ 光路已連通！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success(`光束經 ${res.hit.length} 次反射後抵達感測器，光路連通。`);
+    if(!cap.full)ui.apply.disabled=false;
+  } else {
+    failCount++;solved=false;ui.apply.disabled=true;
+    ui.status.textContent=`✗ 第 ${failCount} 次未連通 — 光束從「${res.exitSide}」離開`;
+    ui.status.className='bad';progressiveHint(res);
+  }
+};
+ui.reset.onclick=()=>{failCount=0;hintLog.clear();initMirrors();
+  solved=false;applied=false;stepMode=false;if(!cap.full)ui.apply.disabled=true;
+  ui.status.textContent='點擊鏡片切換斜向，然後提交驗證';ui.status.className='hint';
+  updateRO();draw();};
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true;ui.apply.disabled=true;cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)';ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'damage',amount:8,machine:'optics'},'*');
+};
+initMirrors();resize();updateRO();
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>槓桿平衡模擬儀</title>
+</head>
+<body>
+<script src="instrument.js"></script>
+<script>
+/* ===== 槓桿平衡模擬儀 · 108課綱 Ee-Ⅳ 力矩與槓桿原理 ===== */
+const PRESETS = {  // 可切換的左側配置（不同關卡）
+  A:{m:6,d:4,label:'配置 A：6kg @ 4格'},
+  B:{m:8,d:3,label:'配置 B：8kg @ 3格'},
+  C:{m:4,d:5,label:'配置 C：4kg @ 5格'},
+};
+let presetKey='A';
+
+const ui = buildInstrument({
+  title:'槓桿平衡模擬儀',
+  tag:'Ee-Ⅳ 力矩',
+  brief:'調整右側砝碼，然後提交驗證',
+  readouts:[
+    {id:'ro_tl',   label:'左側力矩 τ左'},
+    {id:'ro_tr',   label:'右側力矩 τ右'},
+    {id:'ro_diff', label:'力矩差'},
+    {id:'ro_cmp',  label:'平衡判定'},
+    {id:'ro_state',label:'預測狀態'},
+  ],
+  views:[
+    {id:'lever', label:'槓桿'},
+    {id:'bars',  label:'力矩比較'},
+    {id:'fbd',   label:'自由體圖'},
+  ],
+  deckHTML:
+    knob('mass','右側質量',1,8,1,2,' kg') +
+    knob('dist','右側力臂',1,6,1,3,' 格') +
+    `<div class="knob"><label>左側配置</label>
+       <select id="preset" style="background:#0a1426;color:#7fdcff;border:1px solid #1e3a5f;
+         border-radius:5px;padding:4px 7px;font-size:11.5px">
+         <option value="A">A：6kg @ 4格</option>
+         <option value="B">B：8kg @ 3格</option>
+         <option value="C">C：4kg @ 5格</option>
+       </select></div>` +
+    toggle('tg_tau','顯示力矩箭頭',true)
+});
+const cv=ui.cv, ctx=cv.getContext('2d');
+const hintLog=makeHintLog(ui);
+const cap=makeCap(ui, ()=>{ui.status.textContent='此機台強化已達上限，仍可自由練習';ui.status.className='hint';});
+const views=makeViews(ui, ()=>draw());
+const showTau=wireToggle('tg_tau', ()=>draw());
+
+let W,H,solved=false,applied=false,tested=false,failCount=0;
+let tilt=0,tiltTarget=0,anim=null;
+
+function LEFT(){return PRESETS[presetKey];}
+function mass(){return +document.getElementById('mass').value;}
+function dist(){return +document.getElementById('dist').value;}
+function tauL(){return LEFT().m*LEFT().d;}
+function tauR(){return mass()*dist();}
+function balanced(){return tauR()===tauL();}
+
+document.getElementById('preset').onchange=e=>{presetKey=e.target.value;reset();};
+wireKnobs((id,v)=>{ setKnobRD(id, v+(id==='mass'?' kg':' 格')); reset(); });
+
+function reset(){
+  solved=false;applied=false;tested=false;
+  if(!cap.full) ui.apply.disabled=true;
+  tiltTarget=calcTilt(); animate(); refresh();
+}
+function refresh(){updateRO();draw();}
+function calcTilt(){return Math.max(-0.2,Math.min(0.2,(tauR()-tauL())/60));}
+function animate(){ if(anim)cancelAnimationFrame(anim);
+  const st=()=>{tilt+=(tiltTarget-tilt)*0.15;draw();
+    if(Math.abs(tiltTarget-tilt)>0.001)anim=requestAnimationFrame(st);};st();}
+
+function updateRO(){
+  const L=LEFT();
+  setRO('ro_tl',`${L.m} × ${L.d} = ${tauL()}`,'amber');
+  setRO('ro_tr',`${mass()} × ${dist()} = ${tauR()}`,'violet');
+  const d=tauR()-tauL();
+  setRO('ro_diff',(d>0?'+':'')+d, d===0?'green':'red');
+  setRO('ro_cmp', balanced()?'τ左 = τ右':(tauR()<tauL()?'τ左 > τ右':'τ左 < τ右'), balanced()?'green':'red');
+  const s = balanced()?'水平平衡':(tauR()<tauL()?'左沉右翹':'右沉左翹');
+  setRO('ro_state', tested? s+'（已驗證）':s+'（預測）', balanced()?'green':'red');
+}
+function progressiveHint(){
+  const n=failCount,tl=tauL(),tr=tauR(),L=LEFT();
+  if(n<2)return;
+  const side = tr<tl?'左邊下沉（右邊翹起）':'右邊下沉（左邊翹起）';
+  let lv,msg;
+  if(n===2){lv=1;
+    msg=`目前${side}。槓桿要平衡，兩側對支點的「轉動效果」必須相等。`
+      + `想一想：讓槓桿轉動的效果，除了看砝碼多重，還跟什麼有關？`
+      + `<br><span style="opacity:.8">試試切換「力矩比較」檢視，直接看兩側長條的高低差。</span>`;
+  } else if(n===3){lv=2;
+    msg=`使槓桿轉動的量叫做「力矩」，它同時取決於「力的大小」和「力臂（離支點的距離）」。`
+      + `目前${side}，代表你這一側的力矩${tr<tl?'太小':'太大'}。`
+      + `你有「質量」和「力臂」兩個旋鈕——改變任一個都會影響力矩，試著只動一個觀察變化。`;
+  } else {lv=3;
+    msg=`平衡條件是「左側力矩 = 右側力矩」，即 m₁ × d₁ = m₂ × d₂。`
+      + `左側目前固定為 ${L.m}kg 掛在第 ${L.d} 格。請算算看：`
+      + `右側的「質量 × 力臂」要等於多少？再找出能湊出這個乘積的組合。`;
+  }
+  hintLog.add(lv,n,msg);
+}
+function resize(){const v=document.getElementById('viewport');
+  W=cv.width=v.clientWidth;H=cv.height=v.clientHeight;draw();}
+window.addEventListener('resize',resize);
+
+function draw(){ if(!W)return; ctx.clearRect(0,0,W,H);
+  const v=views.current;
+  if(v==='lever')drawLever(); else if(v==='bars')drawBars(); else drawFBD(); }
+
+function drawLever(){
+  const L=LEFT();
+  const cx=W/2, cy=H*0.5, beamLen=Math.min(W*0.36,300), unit=beamLen/6;
+  // 支點
+  ctx.fillStyle='#64748b';ctx.beginPath();
+  ctx.moveTo(cx,cy);ctx.lineTo(cx-22,cy+46);ctx.lineTo(cx+22,cy+46);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#94a3b8';ctx.font='10px sans-serif';ctx.textAlign='center';
+  ctx.fillText('支點',cx,cy+60);
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(tilt);
+  ctx.fillStyle='#94a3b8';ctx.fillRect(-beamLen,-5,beamLen*2,10);
+  // 刻度
+  for(let i=-6;i<=6;i++){ if(i===0)continue;
+    ctx.fillStyle='#475569';ctx.fillRect(i*unit-1,-9,2,18);
+    ctx.fillStyle='#64748b';ctx.font='9px sans-serif';ctx.fillText(Math.abs(i),i*unit,24);}
+  // 左砝碼
+  const lx=-L.d*unit;
+  ctx.fillStyle='#f59e0b';ctx.fillRect(lx-13,5,26,8+L.m*4);
+  ctx.fillStyle='#fde68a';ctx.font='11px sans-serif';ctx.fillText(`${L.m}kg`,lx,5+8+L.m*4+13);
+  // 右砝碼
+  const rm=mass(),rd=dist(),rx=rd*unit;
+  ctx.fillStyle='#38bdf8';ctx.fillRect(rx-13,5,26,8+rm*4);
+  ctx.fillStyle='#bae6fd';ctx.fillText(`${rm}kg`,rx,5+8+rm*4+13);
+  // 力矩箭頭（旋轉方向）
+  if(showTau()){
+    ctx.strokeStyle='rgba(251,191,36,0.8)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(0,0,52,Math.PI*0.72,Math.PI*1.05);ctx.stroke();
+    ctx.strokeStyle='rgba(56,189,248,0.8)';
+    ctx.beginPath();ctx.arc(0,0,52,-Math.PI*0.05,Math.PI*0.28);ctx.stroke();
+  }
+  ctx.restore();
+  ctx.textAlign='left';ctx.font='12px sans-serif';
+  ctx.fillStyle=balanced()?'#4ade80':'#94a3b8';
+  ctx.fillText(tested?(balanced()?'✓ 平衡':(tauR()<tauL()?'✗ 右邊翹起':'✗ 右邊下沉')):'尚未驗證',16,H-14);
+}
+function drawBars(){
+  const bw=Math.min(90,W*0.12), base=H*0.82, maxT=48;
+  const sc=(H*0.6)/maxT;
+  const tl=tauL(),tr=tauR();
+  const draw1=(x,val,col,label)=>{
+    const h=val*sc;
+    ctx.fillStyle=col;ctx.fillRect(x-bw/2,base-h,bw,h);
+    ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=1;ctx.strokeRect(x-bw/2,base-h,bw,h);
+    ctx.fillStyle='#e2e8f0';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
+    ctx.fillText(val,x,base-h-10);
+    ctx.fillStyle='#94a3b8';ctx.font='12px sans-serif';ctx.fillText(label,x,base+20);
+  };
+  draw1(W*0.35,tl,'#f59e0b','左側 τ = m₁ × d₁');
+  draw1(W*0.65,tr,'#38bdf8','右側 τ = m₂ × d₂');
+  // 等高線
+  ctx.strokeStyle='rgba(74,222,128,0.5)';ctx.setLineDash([6,5]);ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(W*0.2,base-tl*sc);ctx.lineTo(W*0.8,base-tl*sc);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#4ade80';ctx.font='11px sans-serif';ctx.textAlign='left';
+  ctx.fillText('目標：右側長條要對齊此線',W*0.2,base-tl*sc-8);
+  ctx.textAlign='center';ctx.font='13px sans-serif';
+  ctx.fillStyle=balanced()?'#4ade80':'#fca5a5';
+  ctx.fillText(balanced()?'兩側力矩相等 → 平衡':`力矩差 ${tr-tl>0?'+':''}${tr-tl}`,W/2,H*0.94);
+  ctx.textAlign='left';
+}
+function drawFBD(){
+  const L=LEFT(), cx=W/2, cy=H*0.45, beamLen=Math.min(W*0.34,280), unit=beamLen/6;
+  ctx.strokeStyle='#94a3b8';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(cx-beamLen,cy);ctx.lineTo(cx+beamLen,cy);ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.beginPath();
+  ctx.moveTo(cx,cy);ctx.lineTo(cx-16,cy+34);ctx.lineTo(cx+16,cy+34);ctx.closePath();ctx.fill();
+  const av=(x,len,col,lab)=>{
+    ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(x,cy);ctx.lineTo(x,cy+len);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,cy+len);ctx.lineTo(x-6,cy+len-9);ctx.lineTo(x+6,cy+len-9);ctx.closePath();ctx.fill();
+    ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(lab,x,cy+len+16);
+  };
+  av(cx-L.d*unit, L.m*9, '#f59e0b', `${L.m}kg × ${L.d}格`);
+  av(cx+dist()*unit, mass()*9, '#38bdf8', `${mass()}kg × ${dist()}格`);
+  // 力臂標示
+  ctx.strokeStyle='rgba(148,163,184,0.5)';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cx,cy-30);ctx.lineTo(cx-L.d*unit,cy-30);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,cy-48);ctx.lineTo(cx+dist()*unit,cy-48);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#f59e0b';ctx.font='10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`d₁ = ${L.d}`,cx-L.d*unit/2,cy-34);
+  ctx.fillStyle='#38bdf8';ctx.fillText(`d₂ = ${dist()}`,cx+dist()*unit/2,cy-52);
+  ctx.fillStyle='#94a3b8';ctx.font='12px sans-serif';
+  ctx.fillText('力矩 τ = 力 × 力臂　（力臂＝施力點到支點的距離）',W/2,H*0.9);
+  ctx.textAlign='left';
+}
+
+ui.submit.onclick=()=>{
+  if(applied)return;
+  tested=true; tiltTarget=calcTilt(); animate(); updateRO();
+  if(balanced()){
+    solved=true; tiltTarget=0; animate();
+    ui.status.textContent='✓ 槓桿平衡！'+(cap.full?'（已達上限）':'可套用強化');
+    ui.status.className='ok';
+    hintLog.success(`τ左 = ${tauL()} = τ右，兩側力矩相等，槓桿水平平衡。`);
+    if(!cap.full) ui.apply.disabled=false;
+  } else {
+    failCount++; solved=false; ui.apply.disabled=true;
+    ui.status.textContent=`✗ 第 ${failCount} 次未平衡 — ${tauR()<tauL()?'右邊翹起':'右邊下沉'}`;
+    ui.status.className='bad'; progressiveHint();
+  }
+};
+ui.reset.onclick=()=>{failCount=0;hintLog.clear();reset();
+  ui.status.textContent='調整右側砝碼，然後提交驗證';ui.status.className='hint';};
+ui.apply.onclick=()=>{
+  if(!solved||applied||cap.full)return;
+  applied=true;ui.apply.disabled=true;cap.inc();
+  ui.status.textContent='✓ 強化已套用！可關閉 (X)';ui.status.className='ok';
+  parent.postMessage({type:'attackUpgrade',kind:'defense',amount:1,machine:'lever'},'*');
+};
+tiltTarget=calcTilt();tilt=tiltTarget;resize();refresh();
+</script>
+</body>
+</html>

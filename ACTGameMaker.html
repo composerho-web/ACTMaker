@@ -202,6 +202,16 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
             <label style="font-size:.72em;color:#555;display:flex;align-items:center;gap:5px;margin-top:4px">
               <input type="checkbox" id="custom-obj-collide" checked> 可碰撞（可站立）
             </label>
+            <label style="font-size:.72em;color:#555;display:flex;align-items:center;gap:5px;margin-top:4px">
+              <input type="checkbox" id="custom-obj-removebg" onchange="document.getElementById('removebg-tol-grp').style.display=this.checked?'block':'none'"> 🪄 自動去背（移除背景）
+            </label>
+            <div id="removebg-tol-grp" style="display:none;margin-top:4px">
+              <label style="font-size:.7em;color:#777;display:block">去背容許度：<span id="removebg-tol-val">40</span>
+                <input type="range" id="custom-obj-tol" min="10" max="120" value="40" style="width:100%"
+                  oninput="document.getElementById('removebg-tol-val').textContent=this.value">
+              </label>
+              <div style="font-size:.66em;color:#999;line-height:1.4">以四角顏色為背景基準，移除相近像素。容許度越高，移除範圍越廣。</div>
+            </div>
           </div>
         </div>
         <div id="obj-lib"><div class="lib-grid" id="lib-grid"></div></div>
@@ -1223,6 +1233,48 @@ stage.addEventListener('dblclick',e=>{
 });
 
 /* ================= 物件 CRUD ================= */
+/* 以四角顏色為背景基準，將相近像素設為透明。回傳 dataURL；若跨域污染則回傳 null */
+function removeBackground(img, tol){
+  try{
+    const cv=document.createElement('canvas'); cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+    const cx=cv.getContext('2d'); cx.drawImage(img,0,0);
+    let data;
+    try{ data=cx.getImageData(0,0,cv.width,cv.height); }
+    catch(e){ return null; }   // 跨域污染，無法讀取像素
+    const d=data.data, W=cv.width, H=cv.height;
+    const corners=[[0,0],[W-1,0],[0,H-1],[W-1,H-1]];
+    let br=0,bg=0,bb=0;
+    corners.forEach(([cxp,cyp])=>{ const i=(cyp*W+cxp)*4; br+=d[i]; bg+=d[i+1]; bb+=d[i+2]; });
+    br/=4; bg/=4; bb/=4;
+    const t2=tol*tol;
+    for(let i=0;i<d.length;i+=4){
+      const dr=d[i]-br, dg=d[i+1]-bg, db=d[i+2]-bb;
+      if(dr*dr+dg*dg+db*db < t2) d[i+3]=0;   // 相近 → 透明
+    }
+    cx.putImageData(data,0,0);
+    return cv.toDataURL('image/png');
+  }catch(e){ return null; }
+}
+/* 載入自訂圖片；若勾選去背則嘗試處理，處理後存回 o.imgProcessed */
+function loadCustomObjImage(o){
+  const im=new Image();
+  if(o.removeBg) im.crossOrigin='anonymous';   // 去背需可讀像素
+  im.onload=()=>{
+    if(o.removeBg){
+      const durl=removeBackground(im, o.tol||40);
+      if(durl){ o.imgProcessed=durl; const p=new Image(); p.onload=redrawStage; p.src=durl; o._img=p; redrawStage(); return; }
+      else { sysAlert('⚠️ 此圖片因跨網域限制無法自動去背（伺服器未開放讀取像素）。\n已改用原圖放置。\n建議：使用支援 CORS 的圖床（GitHub raw、jsDelivr）即可啟用去背。'); }
+    }
+    o._img=im; redrawStage();
+  };
+  im.onerror=()=>{
+    if(o.removeBg){ // 去背載入失敗（多半是 CORS），退回一般載入
+      const im2=new Image(); im2.onload=redrawStage; im2.onerror=redrawStage; im2.src=o.img; o._img=im2;
+      sysAlert('⚠️ 此圖片無法自動去背（跨網域限制）。已改用原圖放置。');
+    } else { redrawStage(); }
+  };
+  im.src=o.img;
+}
 function placeObject(x,y,floor){
   const r=gameData.rooms[currentRoomId];
   if(floor===1&&!r.tall) return sysAlert('此房間不是樓中樓，請先在房間設定改為樓中樓。');
@@ -1231,15 +1283,14 @@ function placeObject(x,y,floor){
   if(objSource==='custom'){
     const url=document.getElementById('custom-obj-url').value.trim();
     if(!url) return sysAlert('請先填入自訂圖片網址。');
-    o={id:'obj_'+Date.now(),src:'custom',img:url,
+    const removeBg=document.getElementById('custom-obj-removebg').checked;
+    const tol=parseInt(document.getElementById('custom-obj-tol').value)||40;
+    o={id:'obj_'+Date.now(),src:'custom',img:url,removeBg,tol,
        w:parseInt(document.getElementById('custom-obj-w').value)||120,
        h:parseInt(document.getElementById('custom-obj-h').value)||120,
        collide:document.getElementById('custom-obj-collide').checked,
        x:Math.round(x),y:Math.round(yy),scale:1,floor};
-    o._img=new Image();
-    o._img.onload=redrawStage;
-    o._img.onerror=()=>{ redrawStage(); };
-    o._img.src=url;
+    loadCustomObjImage(o);
   } else {
     if(!selectedProp) return sysAlert('請先在物件庫點選一個物件。');
     const pr=PROPS[selectedProp];
@@ -1277,7 +1328,7 @@ function saveObject(){
   o.collide=document.getElementById('o-collide').checked;
   if(o.src==='custom'){
     const nu=document.getElementById('o-img').value.trim();
-    if(nu!==o.img){ o.img=nu; o._img=new Image(); o._img.onload=redrawStage; o._img.onerror=redrawStage; o._img.src=nu; }
+    if(nu!==o.img){ o.img=nu; o.imgProcessed=null; loadCustomObjImage(o); }
     o.w=parseInt(document.getElementById('o-w').value)||o.w;
     o.h=parseInt(document.getElementById('o-h').value)||o.h;
   }
@@ -1792,7 +1843,11 @@ function importTXT(ev){
       gameData=JSON.parse(e.target.result);
       if(!gameData.rooms) gameData.rooms={};
       Object.values(gameData.rooms).forEach(r=>r.objects.forEach(o=>{
-        if(o.src==='custom'&&o.img){o._img=new Image();o._img.onload=redrawStage;o._img.src=o.img;}}));
+        if(o.src==='custom'&&o.img){
+          if(o.imgProcessed){ const p=new Image(); p.onload=redrawStage; p.src=o.imgProcessed; o._img=p; }
+          else if(o.removeBg){ loadCustomObjImage(o); }
+          else { o._img=new Image(); o._img.onload=redrawStage; o._img.src=o.img; }
+        }}));
       document.getElementById('game-name').value=gameData.gameName||'';
       autoSave(); renderRoomList();
       const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]);
@@ -2624,7 +2679,7 @@ function drawWorldObject(o){
   if(o.src==='builtin'&&propsLoaded&&PROPS[o.prop]){
     const p=PROPS[o.prop];ctx.imageSmoothingEnabled=true;
     ctx.drawImage(propsImg,p.x,p.y,p.w,p.h,dx,dy,rc.w,rc.h);
-  }else if(o.src==='custom'){const im=getCustomImg(o.img);
+  }else if(o.src==='custom'){const im=getCustomImg(o.imgProcessed||o.img);
     if(im.complete&&im.naturalWidth)ctx.drawImage(im,dx,dy,rc.w,rc.h);
     else{ctx.fillStyle='#4a5568';ctx.fillRect(dx,dy,rc.w,rc.h);} }
 }

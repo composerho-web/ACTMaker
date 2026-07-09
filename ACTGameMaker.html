@@ -1075,19 +1075,28 @@ function trgMarkerPos(t){
   return {x:p.x, y:baseY-CHAR_H*0.65*stageScale, r:15};
 }
 function drawEditorStair(r){
-  const sx=w2s(ROOM_W-140,0).x, sw=130*stageScale;
+  const sx=w2s(ROOM_W-140,0).x;
   const topY=w2s(0,FLOOR_BOT-UPPER_RISE).y, botY=w2s(0,FLOOR_BOT).y;
-  const g=sctx.createLinearGradient(0,topY,0,botY);
-  g.addColorStop(0,r.accent); g.addColorStop(1,r.floor);
-  sctx.fillStyle=g; sctx.globalAlpha=0.9;
-  sctx.fillRect(sx-sw/2,topY-6,sw,botY-topY+6); sctx.globalAlpha=1;
-  sctx.strokeStyle='rgba(255,255,255,.35)'; sctx.lineWidth=1.5;
-  const steps=8, sh=(botY-topY)/steps;
-  for(let i=1;i<steps;i++){const yy=topY+i*sh;
-    sctx.beginPath();sctx.moveTo(sx-sw/2,yy);sctx.lineTo(sx-sw/2+sw*(i/steps),yy);sctx.stroke();}
-  sctx.strokeStyle=r.accent;sctx.lineWidth=2;sctx.strokeRect(sx-sw/2,topY-6,sw,botY-topY+6);
-  sctx.fillStyle='rgba(255,255,255,.8)';sctx.font='11px sans-serif';sctx.textAlign='center';
-  sctx.fillText('▲▼ 樓梯(自動)',sx,botY-8);sctx.textAlign='left';
+  const h=botY-topY;
+  const coreW=20*stageScale+6, glowW=54*stageScale+8;
+  // 外光暈
+  const g=sctx.createLinearGradient(sx-glowW/2,0,sx+glowW/2,0);
+  g.addColorStop(0,'rgba(180,220,255,0)'); g.addColorStop(0.5,'rgba(180,220,255,.35)'); g.addColorStop(1,'rgba(180,220,255,0)');
+  sctx.fillStyle=g; sctx.fillRect(sx-glowW/2,topY-12,glowW,h+16);
+  // 核心
+  const cg=sctx.createLinearGradient(sx-coreW/2,0,sx+coreW/2,0);
+  cg.addColorStop(0,'rgba(180,220,255,.2)'); cg.addColorStop(0.5,'rgba(255,255,255,.85)'); cg.addColorStop(1,'rgba(180,220,255,.2)');
+  sctx.fillStyle=cg; sctx.fillRect(sx-coreW/2,topY-8,coreW,h+12);
+  // 上下光盤
+  sctx.fillStyle='rgba(200,235,255,.7)';
+  sctx.beginPath();sctx.ellipse(sx,botY,coreW*0.9,5,0,0,Math.PI*2);sctx.fill();
+  sctx.beginPath();sctx.ellipse(sx,topY-8,coreW*0.9,4,0,0,Math.PI*2);sctx.fill();
+  // 箭頭
+  sctx.fillStyle='rgba(255,255,255,.85)';
+  sctx.beginPath();sctx.moveTo(sx,topY-22);sctx.lineTo(sx-8,topY-12);sctx.lineTo(sx+8,topY-12);sctx.closePath();sctx.fill();
+  sctx.beginPath();sctx.moveTo(sx,botY-6);sctx.lineTo(sx-8,botY-16);sctx.lineTo(sx+8,botY-16);sctx.closePath();sctx.fill();
+  sctx.fillStyle='rgba(234,255,255,.9)';sctx.font='11px sans-serif';sctx.textAlign='center';
+  sctx.fillText('⬍ 傳送光束(自動)',sx,topY-28);sctx.textAlign='left';
 }
 function drawSampleActor(kind,x,floor){
   const off=floor?UPPER_RISE:0;
@@ -1228,7 +1237,7 @@ function updateStageInfo(){
   if(!currentRoomId){el.textContent='';return;}
   const r=gameData.rooms[currentRoomId];
   el.innerHTML=`房間：<b>${r.name}</b>　物件 ${r.objects.length}　觸發點 ${r.triggers.length}　敵人 ${r.enemyCount}（HP ${r.enemyHp}）<br>
-    <span style="color:#8fd">選取物件後：拖曳黃色把手 或 滾輪 可等比例縮放</span>　房間牆高＝角色 3 倍${r.tall?'（樓中樓再加 3 倍）':''}`;
+    <span style="color:#8fd">選取物件後：拖曳黃色把手／滾輪縮放 · Del 刪除 · Ctrl+C 複製 · Ctrl+V 貼上</span>　房間牆高＝角色 3 倍${r.tall?'（樓中樓再加 3 倍）':''}`;
 }
 
 /* ---------- 舞台互動 ---------- */
@@ -1328,6 +1337,60 @@ stage.addEventListener('wheel',e=>{
   o.scale=Math.round(o.scale*100)/100;
   redrawStage(); updateStageInfo(); autoSave();
 },{passive:false});
+/* ===== 物件鍵盤操作：Del 刪除（確認）、Ctrl+C 複製、Ctrl+V 貼上 ===== */
+let clipboardObj=null;
+function isTypingTarget(el){
+  return el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable);
+}
+function deleteSelectedObject(){
+  if(!currentRoomId||!selectedObj)return;
+  const r=gameData.rooms[currentRoomId];
+  const o=r.objects.find(x=>x.id===selectedObj); if(!o)return;
+  const label = o.src==='pickup' ? (PICKUPS[o.pickupType]?.name||'小物件')
+              : o.src==='custom' ? '自訂圖片物件' : (o.prop||'物件');
+  sysConfirm('確定刪除物件「'+label+'」？',()=>{
+    r.objects=r.objects.filter(x=>x.id!==selectedObj);
+    selectedObj=null; autoSave(); renderRoomList(); redrawStage(); updateStageInfo();
+  });
+}
+function copySelectedObject(){
+  if(!currentRoomId||!selectedObj)return false;
+  const o=gameData.rooms[currentRoomId].objects.find(x=>x.id===selectedObj); if(!o)return false;
+  clipboardObj=JSON.parse(JSON.stringify(o,(k,v)=>k==='_img'||k==='_handle'?undefined:v));
+  const tip=document.getElementById('stage-tip');
+  tip.style.display='block'; tip.textContent='📋 已複製物件，按 Ctrl+V 貼上';
+  tip.style.left='50%'; tip.style.top='40px'; tip.style.transform='translateX(-50%)';
+  setTimeout(()=>{ tip.style.display='none'; tip.style.transform=''; }, 1400);
+  return true;
+}
+function pasteObject(){
+  if(!currentRoomId||!clipboardObj)return;
+  const r=gameData.rooms[currentRoomId];
+  const n=JSON.parse(JSON.stringify(clipboardObj));
+  n.id='obj_'+Date.now()+'_'+Math.floor(Math.random()*1000);
+  // 貼在原位稍微偏移，方便拉開
+  n.x=Math.min(ROOM_W-20, (n.x||120)+40);
+  n.y=(n.y!=null?n.y:FLOOR_BOT);
+  // 若貼到的房間非樓中樓，強制下層
+  if(n.floor===1&&!r.tall){ n.floor=0; n.y=FLOOR_BOT; }
+  // 重建自訂圖
+  if(n.src==='custom'&&n.img){
+    if(n.imgProcessed){ const p=new Image(); p.onload=redrawStage; p.src=n.imgProcessed; n._img=p; }
+    else { const im=new Image(); im.onload=redrawStage; im.onerror=redrawStage; im.src=n.img; n._img=im; }
+  }
+  r.objects.push(n); selectedObj=n.id;
+  setMode('select');   // 貼上後切到選取，方便立即拖動
+  autoSave(); renderRoomList(); redrawStage(); updateStageInfo();
+}
+document.addEventListener('keydown',e=>{
+  if(isTypingTarget(document.activeElement))return;      // 輸入框內不攔截
+  // 有彈窗開啟時不處理（避免誤刪）
+  const modalOpen=[...document.querySelectorAll('.modal-backdrop')].some(m=>m.classList.contains('show'));
+  if(modalOpen&&e.key!=='Escape')return;
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedObj){ e.preventDefault(); deleteSelectedObject(); }
+  else if((e.ctrlKey||e.metaKey)&&(e.key==='c'||e.key==='C')){ if(copySelectedObject())e.preventDefault(); }
+  else if((e.ctrlKey||e.metaKey)&&(e.key==='v'||e.key==='V')){ if(clipboardObj){e.preventDefault();pasteObject();} }
+});
 stage.addEventListener('dblclick',e=>{
   if(!currentRoomId) return;
   const rect=stage.getBoundingClientRect();
@@ -2300,14 +2363,15 @@ function platformHeight(x,floorOffset){
   });
   return h;
 }
+let stairFlash=0, stairNear=false;
 function handleStairs(pl){
-  if(!curRoom||!curRoom.tall)return;
+  if(!curRoom||!curRoom.tall){stairNear=false;return;}
   // 房間右側固定內部樓梯區
   const stairX=ROOM_W-140, stairW=130;
-  const nearStair=Math.abs(pl.x-stairX)<stairW/2;
-  if(nearStair){
-    if((justPressed['ArrowUp']||justPressed['KeyW'])&&pl.floorOffset===0){pl.floorOffset=UPPER_RISE;SFX.door();}
-    else if((justPressed['ArrowDown']||justPressed['KeyS'])&&pl.floorOffset===UPPER_RISE){pl.floorOffset=0;SFX.door();}
+  stairNear=Math.abs(pl.x-stairX)<stairW/2;
+  if(stairNear){
+    if((justPressed['ArrowUp']||justPressed['KeyW'])&&pl.floorOffset===0){pl.floorOffset=UPPER_RISE;SFX.door();stairFlash=20;}
+    else if((justPressed['ArrowDown']||justPressed['KeyS'])&&pl.floorOffset===UPPER_RISE){pl.floorOffset=0;SFX.door();stairFlash=20;}
   }
 }
 function loadRoom(id,fromDir){
@@ -2783,25 +2847,59 @@ function render(){
   // 物件（下層先畫）
   const objs=[...(r.objects||[])].sort((a,b)=>((a.floor?1:0)-(b.floor?1:0))||(a.y-b.y));
   objs.forEach(drawWorldObject);
-  // 樓中樓樓梯：自動用色塊補齊（從下層地板貫穿到上層地板）
+  // 樓中樓傳送光束：閃動白光圓柱 + 上下箭頭；傳送時閃黃光
   if(r.tall){
-    const sx=ROOM_W-140-camera.x, sw=130;
+    const sx=ROOM_W-140-camera.x;
     const topY=FLOOR_BOT-UPPER_RISE-camera.y;   // 上層地板面
     const botY=FLOOR_BOT-camera.y;              // 下層地板面
-    // 樓梯主體色塊
-    const grd=ctx.createLinearGradient(0,topY,0,botY);
-    grd.addColorStop(0,r.accent); grd.addColorStop(1,r.floor);
-    ctx.fillStyle=grd; ctx.globalAlpha=0.9;
-    ctx.fillRect(sx-sw/2,topY-6,sw,botY-topY+6);
-    ctx.globalAlpha=1;
-    // 階梯紋路
-    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
-    const steps=8, sh=(botY-topY)/steps;
-    for(let i=1;i<steps;i++){ const yy=topY+i*sh;
-      ctx.beginPath(); ctx.moveTo(sx-sw/2,yy); ctx.lineTo(sx-sw/2+sw*(i/steps),yy); ctx.stroke(); }
-    ctx.strokeStyle=r.accent; ctx.lineWidth=2; ctx.strokeRect(sx-sw/2,topY-6,sw,botY-topY+6);
-    ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='12px sans-serif';ctx.textAlign='center';
-    ctx.fillText('▲▼ 樓梯',sx,botY-8);ctx.textAlign='left';
+    const h=botY-topY;
+    const pulse=0.5+0.5*Math.sin(blinkPhase*0.18);
+    const active=stairFlash>0;                  // 傳送瞬間
+    const near=stairNear;
+    // 主色：平時白光、靠近偏亮、傳送閃黃
+    const base = active ? '255,220,60' : (near? '210,240,255' : '180,220,255');
+    ctx.save();
+    // 外光暈柱
+    const glowW = 54 + (active?26:near?10:0);
+    const g=ctx.createLinearGradient(sx-glowW/2,0,sx+glowW/2,0);
+    g.addColorStop(0,`rgba(${base},0)`);
+    g.addColorStop(0.5,`rgba(${base},${(active?0.5:0.28)+0.18*pulse})`);
+    g.addColorStop(1,`rgba(${base},0)`);
+    ctx.fillStyle=g; ctx.fillRect(sx-glowW/2, topY-14, glowW, h+20);
+    // 核心光束
+    const coreW = 20 + (active?10:0);
+    const cg=ctx.createLinearGradient(sx-coreW/2,0,sx+coreW/2,0);
+    cg.addColorStop(0,`rgba(${base},0.15)`);
+    cg.addColorStop(0.5,`rgba(255,255,255,${active?0.95:0.6+0.3*pulse})`);
+    cg.addColorStop(1,`rgba(${base},0.15)`);
+    ctx.fillStyle=cg; ctx.fillRect(sx-coreW/2, topY-10, coreW, h+14);
+    // 掃描環（沿光束上下流動）
+    ctx.strokeStyle=`rgba(${base},${0.5+0.3*pulse})`; ctx.lineWidth=2;
+    const rings=5;
+    for(let i=0;i<rings;i++){
+      const t=((blinkPhase*0.02 + i/rings)%1);
+      const ry=botY-8 - t*(h-4);
+      const rw=coreW*(0.7+0.5*Math.sin(t*Math.PI));
+      ctx.beginPath(); ctx.ellipse(sx,ry,rw/2,3.5,0,0,Math.PI*2); ctx.stroke();
+    }
+    // 底座與頂座光盤
+    ctx.fillStyle=`rgba(${base},${0.55+0.25*pulse})`;
+    ctx.beginPath(); ctx.ellipse(sx,botY,coreW*0.9,6,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx,topY-8,coreW*0.9,5,0,0,Math.PI*2); ctx.fill();
+    // 上下箭頭（在光束上方閃動）
+    const arrowGlow = near? (0.6+0.4*pulse) : 0.4;
+    const aCol = active? `rgba(255,220,60,1)` : `rgba(255,255,255,${arrowGlow})`;
+    ctx.fillStyle=aCol;
+    const ax=sx, ayTop=topY-24, ayBot=botY-h*0.5;
+    // 上箭頭（往上層）
+    ctx.beginPath(); ctx.moveTo(ax,ayTop-8); ctx.lineTo(ax-9,ayTop+4); ctx.lineTo(ax+9,ayTop+4); ctx.closePath(); ctx.fill();
+    // 下箭頭（往下層）在底附近
+    ctx.beginPath(); ctx.moveTo(ax,botY-6); ctx.lineTo(ax-9,botY-18); ctx.lineTo(ax+9,botY-18); ctx.closePath(); ctx.fill();
+    // 提示文字
+    if(near){ ctx.fillStyle=active?'#ffdd44':'#eaffff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(player.floorOffset===0?'按 ↑ 上樓':'按 ↓ 下樓', sx, topY-32); ctx.textAlign='left'; }
+    ctx.restore();
+    if(stairFlash>0)stairFlash--;
   }
   // 觸發點
   (r.triggers||[]).forEach(drawWorldTrigger);

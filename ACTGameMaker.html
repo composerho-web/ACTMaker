@@ -675,7 +675,7 @@ function createNewRoom(){
 }
 function selectRoom(id){
   currentRoomId=id; selectedObj=null;
-  renderRoomList(); redrawStage(); updateStageInfo();
+  renderRoomList(); resizeStage(); updateStageInfo();
 }
 function renderRoomList(){
   const box=document.getElementById('room-list'); box.innerHTML='';
@@ -756,7 +756,7 @@ function saveRoomSettings(){
   r.isEnd=document.getElementById('r-isEnd').checked;
   if(r.isStart&&!wasStart) Object.values(gameData.rooms).forEach(x=>{if(x.id!==r.id)x.isStart=false;});
   if(!r.tall){ r.objects.forEach(o=>o.floor=0); r.triggers.forEach(t=>t.floor=0); }
-  autoSave(); renderRoomList(); redrawStage(); closeModal('room-modal');
+  autoSave(); renderRoomList(); resizeStage(); closeModal('room-modal');
 }
 function deleteCurrentRoom(){
   sysConfirm('確定刪除此房間？',()=>{
@@ -820,10 +820,16 @@ function resizeStage(){
   stage.width=Math.round(cssW*dpr); stage.height=Math.round(cssH*dpr);
   sctx.setTransform(dpr,0,0,dpr,0,0);   // 邏輯座標仍用 CSS 尺寸
   // 以能完整顯示 ROOM_W × (VIEW_H+UPPER_RISE) 為原則
-  const needH = FLOOR_BOT + UPPER_RISE + 20;
-  stageScale=Math.min(cssW/ROOM_W, cssH/needH)*0.94;
+  // 依目前房間是否為樓中樓決定所需高度：單層只算下層，樓中樓才含上層
+  const r=currentRoomId&&gameData.rooms[currentRoomId];
+  const isTall=r&&r.tall;
+  const contentTopWorld = isTall ? (FLOOR_TOP-UPPER_RISE) : FLOOR_TOP;   // 內容最上緣（world y）
+  const contentH = FLOOR_BOT - contentTopWorld + 30;                     // 內容總高
+  stageScale=Math.min(cssW/(ROOM_W+40), cssH/contentH)*0.96;
   stageOffX=(cssW-ROOM_W*stageScale)/2;
-  stageOffY=(cssH-needH*stageScale)/2 + UPPER_RISE*stageScale;
+  // 讓內容垂直置中
+  const contentPxH=contentH*stageScale;
+  stageOffY=(cssH-contentPxH)/2 - (contentTopWorld+UPPER_RISE)*stageScale + 15*stageScale;
   redrawStage();
 }
 window.addEventListener('resize',resizeStage);

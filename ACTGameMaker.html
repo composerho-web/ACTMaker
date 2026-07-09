@@ -474,6 +474,14 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       </div>
     </div>
     <div class="form-group"><label><input type="checkbox" id="o-collide"> 可碰撞（阻擋移動、可站立於其上）</label></div>
+    <div id="o-pickup-grp" style="display:none;background:#f0f7ff;border:1px solid #cce0f5;border-radius:8px;padding:12px;margin-top:6px">
+      <div style="font-weight:bold;color:var(--primary);margin-bottom:8px" id="o-pickup-title">✨ 小物件參數</div>
+      <div class="form-group" style="margin-bottom:0">
+        <label id="o-pickup-label">數值</label>
+        <input type="number" id="o-pickup-val" class="form-control">
+        <div style="font-size:.76em;color:#888;margin-top:5px" id="o-pickup-hint"></div>
+      </div>
+    </div>
     <div id="o-custom-grp" style="display:none">
       <div class="form-group"><label>自訂圖片網址</label><input type="text" id="o-img" class="form-control"></div>
       <div class="form-row">
@@ -634,7 +642,7 @@ function loadPreviewSprites(){
 }
 // 士兵 idle 首幀框架、機器人 idle 首幀框架（供預覽）
 const PREVIEW_FRAME={
-  player:{sx:74-72,sy:0,sw:144,sh:151},     // NEWC row0 col0
+  player:{sx:106-106,sy:9,sw:213,sh:213},    // NEWC row0 col0 (新高解析度)
   enemy:{sx:96-86,sy:56,sw:172,sh:160}      // ROBOT row0 col0
 };
 
@@ -669,6 +677,9 @@ const PICKUPS={
   mine:     {emoji:'💣', name:'地雷', good:false,     color:'#f87171', val:35,  desc:'踩到爆炸，扣 35 能量'},
   spike:    {emoji:'🔺', name:'尖刺', good:false,     color:'#fb923c', val:20,  desc:'觸碰扣 20 能量'},
   alarm:    {emoji:'🔔', name:'警鈴', good:false,     color:'#facc15', val:30,  desc:'觸碰警鈴，限時 -30 秒'},
+  flame:    {emoji:'🔥', name:'地面火焰', good:false,  color:'#ff6b3d', val:15,  desc:'從地上定時噴出火焰，燒到扣 15 能量', turret:true},
+  laser:    {emoji:'🔴', name:'天花板雷射', good:false,color:'#ff4d6d', val:18,  desc:'從天花板定時向下發射雷射，扣 18 能量', turret:true},
+  cannon:   {emoji:'🎯', name:'橫向砲台', good:false,  color:'#e879f9', val:22,  desc:'不定時發射橫越畫面的砲彈，擊中扣 22 能量', turret:true},
 };
 
 /* ---------- 內建物件圖庫（來自 props2.json） ---------- */
@@ -1091,10 +1102,10 @@ function drawEditorStair(r){
   sctx.fillStyle='rgba(200,235,255,.7)';
   sctx.beginPath();sctx.ellipse(sx,botY,coreW*0.9,5,0,0,Math.PI*2);sctx.fill();
   sctx.beginPath();sctx.ellipse(sx,topY-8,coreW*0.9,4,0,0,Math.PI*2);sctx.fill();
-  // 箭頭
+  // 箭頭：頂端向下、底端向上
   sctx.fillStyle='rgba(255,255,255,.85)';
-  sctx.beginPath();sctx.moveTo(sx,topY-22);sctx.lineTo(sx-8,topY-12);sctx.lineTo(sx+8,topY-12);sctx.closePath();sctx.fill();
-  sctx.beginPath();sctx.moveTo(sx,botY-6);sctx.lineTo(sx-8,botY-16);sctx.lineTo(sx+8,botY-16);sctx.closePath();sctx.fill();
+  sctx.beginPath();sctx.moveTo(sx,topY-12);sctx.lineTo(sx-8,topY-22);sctx.lineTo(sx+8,topY-22);sctx.closePath();sctx.fill();
+  sctx.beginPath();sctx.moveTo(sx,botY-6);sctx.lineTo(sx-8,botY+4);sctx.lineTo(sx+8,botY+4);sctx.closePath();sctx.fill();
   sctx.fillStyle='rgba(234,255,255,.9)';sctx.font='11px sans-serif';sctx.textAlign='center';
   sctx.fillText('⬍ 傳送光束(自動)',sx,topY-28);sctx.textAlign='left';
 }
@@ -1499,6 +1510,23 @@ function editObject(id){
     document.getElementById('o-img').value=o.img||'';
     document.getElementById('o-w').value=o.w; document.getElementById('o-h').value=o.h;
   }
+  // 小物件參數
+  const pg=document.getElementById('o-pickup-grp');
+  if(o.src==='pickup'){
+    const pk=PICKUPS[o.pickupType]||{};
+    pg.style.display='block';
+    const unit={heal:'能量',energymax:'能量上限',ammo:'傷害',firerate:'射速等級',shield:'護盾',
+                speed:'速度等級',timeplus:'秒數',star:'分數',mine:'扣能量',spike:'扣能量',alarm:'扣秒數'}[o.pickupType]||'數值';
+    document.getElementById('o-pickup-title').textContent=(pk.emoji||'')+' '+(pk.name||'小物件')+' 參數';
+    document.getElementById('o-pickup-label').textContent=(pk.good===false?'損害／扣除量（'+unit+'）':'效果數值（'+unit+'）');
+    document.getElementById('o-pickup-val').value=(o.val!=null?o.val:pk.val);
+    document.getElementById('o-pickup-hint').textContent=pk.desc||'';
+    // 小物件不需要碰撞/自訂欄位
+    document.getElementById('o-collide').closest('.form-group').style.display='none';
+  } else {
+    pg.style.display='none';
+    document.getElementById('o-collide').closest('.form-group').style.display='';
+  }
   openModal('obj-modal');
 }
 function saveObject(){
@@ -1516,7 +1544,11 @@ function saveObject(){
     o.w=parseInt(document.getElementById('o-w').value)||o.w;
     o.h=parseInt(document.getElementById('o-h').value)||o.h;
   }
-  autoSave(); redrawStage(); closeModal('obj-modal');
+  if(o.src==='pickup'){
+    const v=parseInt(document.getElementById('o-pickup-val').value);
+    if(!isNaN(v)) o.val=Math.max(0,v);
+  }
+  autoSave(); redrawStage(); updateStageInfo(); closeModal('obj-modal');
 }
 function deleteObject(){
   const r=gameData.rooms[currentRoomId];
@@ -2043,7 +2075,7 @@ function importTXT(ev){
 }
 
 /* ================= 內建示範專案 ================= */
-const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_10453", "src": "pickup", "pickupType": "heal", "collide": false, "x": 700, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_12279", "src": "pickup", "pickupType": "star", "collide": false, "x": 1000, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_82135", "src": "pickup", "pickupType": "mine", "collide": false, "x": 850, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80, "wallpaper": "grid", "wallpaperColor": "#2f4a5a", "floorThickness": 16}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_69178", "src": "pickup", "pickupType": "ammo", "collide": false, "x": 650, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_8130", "src": "pickup", "pickupType": "spike", "collide": false, "x": 1200, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80, "wallpaper": "circuit", "wallpaperColor": "#5a5030", "floorThickness": 16}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_pk_3845", "src": "pickup", "pickupType": "shield", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_pk_43500", "src": "pickup", "pickupType": "timeplus", "collide": false, "x": 450, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_63891", "src": "pickup", "pickupType": "alarm", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 820, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80, "wallpaper": "hex", "wallpaperColor": "#3a5a6a", "floorThickness": 16}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_38589", "src": "pickup", "pickupType": "heal", "collide": false, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_4365", "src": "pickup", "pickupType": "energymax", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80, "wallpaper": "brick", "wallpaperColor": "#5a3040", "floorThickness": 16}}};
+const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_10453", "src": "pickup", "pickupType": "heal", "collide": false, "x": 700, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_12279", "src": "pickup", "pickupType": "star", "collide": false, "x": 1000, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_82135", "src": "pickup", "pickupType": "mine", "collide": false, "x": 850, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80, "wallpaper": "grid", "wallpaperColor": "#2f4a5a", "floorThickness": 16}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_69178", "src": "pickup", "pickupType": "ammo", "collide": false, "x": 650, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_8130", "src": "pickup", "pickupType": "spike", "collide": false, "x": 1200, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_hz_41409", "src": "pickup", "pickupType": "flame", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0, "val": 12}, {"id": "obj_hz_91380", "src": "pickup", "pickupType": "laser", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0, "val": 15}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80, "wallpaper": "circuit", "wallpaperColor": "#5a5030", "floorThickness": 16}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_pk_3845", "src": "pickup", "pickupType": "shield", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_pk_43500", "src": "pickup", "pickupType": "timeplus", "collide": false, "x": 450, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_63891", "src": "pickup", "pickupType": "alarm", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 820, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80, "wallpaper": "hex", "wallpaperColor": "#3a5a6a", "floorThickness": 16}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_38589", "src": "pickup", "pickupType": "heal", "collide": false, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_4365", "src": "pickup", "pickupType": "energymax", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_hz_26767", "src": "pickup", "pickupType": "cannon", "collide": false, "x": 1450, "y": 430, "scale": 1, "floor": 0, "val": 25}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80, "wallpaper": "brick", "wallpaperColor": "#5a3040", "floorThickness": 16}}};
 function loadDemo(){
   sysConfirm('載入示範專案「實驗設施保衛戰」？\n這會覆蓋目前的編輯內容（若尚未匯出請先匯出專案）。',()=>{
     gameData=JSON.parse(JSON.stringify(DEMO_PROJECT));
@@ -2100,8 +2132,8 @@ function Sheet(src,cfg){this.c=cfg.centers;this.t=cfg.rowTops;this.rh=cfg.rowH;t
   this.cw=cfg.cellW;this.loaded=false;this.img=new Image();this.img.onload=()=>this.loaded=true;this.img.src=src;}
 Sheet.prototype.rect=function(row,col){const cx=this.c[col];const sh=(this.rhs&&this.rhs[row])||this.rh;
   return{sx:cx-this.cw/2,sy:this.t[row],sw:this.cw,sh};};
-const SOLDIER=new Sheet('NEWC.png',{centers:[74,219,363,508,652,801,944,1090,1238,1383,1527,1677,1814,1956],
-  rowTops:[0,170,321,499,641,819],rowHeights:[151,145,160,154,162,146],rowH:162,cellW:144});
+const SOLDIER=new Sheet('NEWC.png',{centers:[106,319,531,744,957,1169,1382,1594,1807,2019,2232,2445,2657,2870],
+  rowTops:[9,259,480,748,954,1193],rowHeights:[213,206,233,206,239,239],rowH:239,cellW:213});
 const ROBOT=new Sheet('ROBOT.png',{centers:[96,275,449,615,787,960,1140,1309,1479,1655,1820,1984],
   rowTops:[56,243,415,599,774,947],rowH:160,cellW:172});
 const SOLDIER_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},
@@ -2377,7 +2409,9 @@ function handleStairs(pl){
 function loadRoom(id,fromDir){
   curRoom=P.rooms[id]; window.__curRoomId=id;
   if(!visited.includes(id))visited.push(id);
-  enemies=[];projectiles=[];particles=[];
+  enemies=[];projectiles=[];particles=[];hazardProj=[];
+  // 重置砲台計時器
+  (curRoom.objects||[]).forEach(o=>{if(o.src==='pickup'){o._t=undefined;o._hitCd=0;o._warn=false;o._fire=false;}});
   // 生成敵人（避開右側樓梯與出入口）
   const n=curRoom.enemyCount||0;
   for(let i=0;i<n;i++){
@@ -2675,6 +2709,7 @@ function checkPickups(){
   const pf=player.floorOffset;
   curRoom.objects.forEach(o=>{
     if(o.src!=='pickup'||o._taken)return;
+    const pk=PICKUPS[o.pickupType]; if(pk&&pk.turret)return;   // 砲台類不是一次性拾取
     if((o.floor?UPPER_RISE:0)!==pf)return;
     const rad=20*(o.scale||1);
     const cy=(o.y||FLOOR_BOT)-(o.floor?UPPER_RISE:0)-rad-6;
@@ -2684,10 +2719,130 @@ function checkPickups(){
     }
   });
 }
+/* ===== 敵方基地防禦武器（砲台類）：地面火焰、天花板雷射、橫向砲彈 ===== */
+let hazardProj=[];   // 橫向砲彈
+function updateTurrets(){
+  if(!curRoom||!curRoom.objects)return;
+  const pf=player.floorOffset;
+  curRoom.objects.forEach(o=>{
+    if(o.src!=='pickup')return; const pk=PICKUPS[o.pickupType]; if(!pk||!pk.turret)return;
+    if((o.floor?UPPER_RISE:0)!==pf && o.pickupType!=='cannon')return;  // 火焰/雷射只作用同層；砲彈橫掃全層
+    o._t=(o._t||Math.floor(Math.random()*120))+1;
+    const dmg=(o.val!=null?o.val:pk.val);
+    const gx=o.x, floorY=FLOOR_BOT-(o.floor?UPPER_RISE:0);
+    if(o.pickupType==='flame'){
+      // 週期：蓄力(招式前搖) → 噴發
+      const cyc=o._t%110;
+      o._warn = cyc>=70&&cyc<85;   // 前搖警示
+      o._fire = cyc>=85;            // 噴發中
+      if(o._fire){
+        const px=player.x, pz=player.z;
+        if(Math.abs(px-gx)<38 && pz<70 && player.floorOffset===(o.floor?UPPER_RISE:0)){
+          if(!o._hitCd){ player.hurt(dmg,0); SFX.hurt(); o._hitCd=30; }
+        }
+        for(let i=0;i<2;i++)particles.push({x:gx+(Math.random()-0.5)*30,y:floorY-Math.random()*90,
+          vx:(Math.random()-0.5)*2,vy:-2-Math.random()*3,life:16,c:Math.random()<.5?'#ff6b3d':'#ffd43b'});
+      }
+      if(o._hitCd)o._hitCd--;
+    } else if(o.pickupType==='laser'){
+      const cyc=o._t%130;
+      o._warn = cyc>=60&&cyc<80;
+      o._fire = cyc>=80&&cyc<105;
+      if(o._fire){
+        const px=player.x;
+        if(Math.abs(px-gx)<16 && player.floorOffset===(o.floor?UPPER_RISE:0)){
+          if(!o._hitCd){ player.hurt(dmg,0); SFX.hit(); o._hitCd=24; }
+        }
+      }
+      if(o._hitCd)o._hitCd--;
+    } else if(o.pickupType==='cannon'){
+      const period=Math.max(60,150-dmg);   // 傷害越高發射越頻繁
+      if(o._t%period===0){
+        const dir=(o.x>ROOM_W/2)?-1:1;      // 靠右→往左射，靠左→往右射
+        const startX=dir>0?-20:ROOM_W+20;
+        const fo=o.floor?UPPER_RISE:0;
+        hazardProj.push({x:startX,y:FLOOR_BOT-fo-40-Math.random()*40,vx:dir*6,dmg,floorOffset:fo,life:300});
+        SFX.shoot();
+      }
+    }
+  });
+  // 橫向砲彈移動與命中
+  hazardProj.forEach(p=>{ p.x+=p.vx; p.life--;
+    if(player.floorOffset===p.floorOffset){
+      const py=(FLOOR_BOT-p.floorOffset)-player.z-CHAR_H*0.5;
+      if(Math.abs(player.x-p.x)<26 && Math.abs(py-p.y)<CHAR_H*0.6){
+        player.hurt(p.dmg,Math.sign(p.vx)); SFX.hit(); p.life=0;
+        for(let i=0;i<8;i++)particles.push({x:p.x,y:p.y,vx:(Math.random()-0.5)*6,vy:-Math.random()*4,life:18,c:'#e879f9'});
+      }
+    }
+  });
+  hazardProj=hazardProj.filter(p=>p.life>0&&p.x>-40&&p.x<ROOM_W+40);
+}
+function drawTurretEffects(){
+  if(!curRoom||!curRoom.objects)return;
+  curRoom.objects.forEach(o=>{
+    if(o.src!=='pickup')return; const pk=PICKUPS[o.pickupType]; if(!pk||!pk.turret)return;
+    const off=o.floor?UPPER_RISE:0;
+    const gx=o.x-camera.x, floorY=FLOOR_BOT-off-camera.y, ceilY=FLOOR_TOP-off-camera.y;
+    if(o.pickupType==='flame'){
+      // 噴口
+      ctx.fillStyle='#7a2d10'; ctx.fillRect(gx-16,floorY-8,32,8);
+      ctx.fillStyle='#b45309'; for(let i=-1;i<2;i++)ctx.fillRect(gx+i*10-2,floorY-11,4,4);
+      if(o._warn){ ctx.fillStyle='rgba(255,120,40,'+(0.4+0.3*Math.sin(blinkPhase))+')';
+        ctx.fillRect(gx-14,floorY-14,28,6); }
+      if(o._fire){
+        const grd=ctx.createLinearGradient(0,floorY,0,floorY-100);
+        grd.addColorStop(0,'#ffd43b'); grd.addColorStop(0.5,'#ff6b3d'); grd.addColorStop(1,'rgba(255,60,20,0)');
+        ctx.fillStyle=grd;
+        ctx.beginPath(); ctx.moveTo(gx-18,floorY);
+        ctx.quadraticCurveTo(gx-10,floorY-70,gx,floorY-100);
+        ctx.quadraticCurveTo(gx+10,floorY-70,gx+18,floorY);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if(o.pickupType==='laser'){
+      // 天花板發射器
+      ctx.fillStyle='#4a1020'; ctx.fillRect(gx-14,ceilY,28,10);
+      ctx.fillStyle=o._warn?('rgba(255,80,110,'+(0.5+0.5*Math.sin(blinkPhase*0.5))+')'):'#ff4d6d';
+      ctx.beginPath(); ctx.arc(gx,ceilY+10,4,0,Math.PI*2); ctx.fill();
+      if(o._warn){ // 瞄準線
+        ctx.strokeStyle='rgba(255,80,110,.4)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+        ctx.beginPath(); ctx.moveTo(gx,ceilY+12); ctx.lineTo(gx,floorY); ctx.stroke(); ctx.setLineDash([]);
+      }
+      if(o._fire){
+        ctx.strokeStyle='#ff4d6d'; ctx.lineWidth=6; ctx.globalAlpha=0.85;
+        ctx.beginPath(); ctx.moveTo(gx,ceilY+12); ctx.lineTo(gx,floorY); ctx.stroke();
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke();
+        ctx.globalAlpha=1;
+        ctx.shadowColor='#ff4d6d'; ctx.shadowBlur=14;
+        ctx.strokeStyle='#ff4d6d'; ctx.lineWidth=6; ctx.stroke(); ctx.shadowBlur=0;
+      }
+    } else if(o.pickupType==='cannon'){
+      // 砲台底座
+      const cy=floorY-20;
+      ctx.fillStyle='#3a1a4a'; ctx.beginPath(); ctx.arc(gx,floorY,16,Math.PI,0); ctx.fill();
+      ctx.fillStyle='#e879f9'; ctx.fillRect(gx-5,cy-6,10,18);
+      const dir=(o.x>ROOM_W/2)?-1:1;
+      ctx.fillStyle='#c026d3'; ctx.fillRect(gx+(dir>0?4:-14),cy-3,10,6);
+      ctx.fillStyle='rgba(232,121,249,'+(0.4+0.3*Math.sin(blinkPhase*0.2))+')';
+      ctx.beginPath(); ctx.arc(gx,cy,4,0,Math.PI*2); ctx.fill();
+    }
+  });
+  // 橫向砲彈
+  hazardProj.forEach(p=>{ if(player&&p.floorOffset!==player.floorOffset)return;
+    const sx=p.x-camera.x, sy=p.y-camera.y;
+    ctx.fillStyle='#e879f9'; ctx.shadowColor='#e879f9'; ctx.shadowBlur=12;
+    ctx.beginPath(); ctx.arc(sx,sy,8,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0; ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(sx,sy,3,0,Math.PI*2); ctx.fill();
+    // 尾焰
+    ctx.fillStyle='rgba(232,121,249,.4)';
+    ctx.beginPath(); ctx.arc(sx-Math.sign(p.vx)*10,sy,5,0,Math.PI*2); ctx.fill();
+  });
+}
 function applyPickup(o){
   const pk=PICKUPS[o.pickupType]; if(!pk)return;
   o._taken=true;
-  const v=pk.val;
+  const v=(o.val!=null?o.val:pk.val);
   switch(o.pickupType){
     case 'heal': player.hp=Math.min(player.maxHp,player.hp+v); SFX.pickup(); floatText('+'+v+' 能量','#4ade80',o); break;
     case 'energymax': maxhpUp+=v; player.maxHp=P.playerHp+maxhpUp; player.hp=player.maxHp; SFX.pickup(); floatText('能量上限 +'+v,'#ff8fb0',o); break;
@@ -2754,6 +2909,7 @@ function loop(){
   requestAnimationFrame(loop);
   blinkPhase++;
   if(gameState!=='play'){ justPressed={}; return; }
+  if(isTyping()){ keys={}; justPressed={}; render(); return; }   // 打字/彈窗時暫停操作但持續繪製
   if(!machineOpen){
     player.update();
     enemies.forEach(e=>e.update(player));
@@ -2765,6 +2921,7 @@ function loop(){
     particles.forEach(pt=>{pt.x+=pt.vx;pt.y+=pt.vy;if(!pt.txt)pt.vy+=0.4;pt.life--;});
     particles=particles.filter(pt=>pt.life>0);
     checkPickups();
+    updateTurrets();
     checkClearEnding();
     // 出入口自動提示 / 攝影機
     camera.x=Math.max(0,Math.min(ROOM_W-VIEW_W,player.x-VIEW_W/2));
@@ -2847,6 +3004,8 @@ function render(){
   // 物件（下層先畫）
   const objs=[...(r.objects||[])].sort((a,b)=>((a.floor?1:0)-(b.floor?1:0))||(a.y-b.y));
   objs.forEach(drawWorldObject);
+  // 敵方防禦武器效果（火焰/雷射/砲台與砲彈）
+  drawTurretEffects();
   // 樓中樓傳送光束：閃動白光圓柱 + 上下箭頭；傳送時閃黃光
   if(r.tall){
     const sx=ROOM_W-140-camera.x;
@@ -2890,14 +3049,16 @@ function render(){
     const arrowGlow = near? (0.6+0.4*pulse) : 0.4;
     const aCol = active? `rgba(255,220,60,1)` : `rgba(255,255,255,${arrowGlow})`;
     ctx.fillStyle=aCol;
-    const ax=sx, ayTop=topY-24, ayBot=botY-h*0.5;
-    // 上箭頭（往上層）
-    ctx.beginPath(); ctx.moveTo(ax,ayTop-8); ctx.lineTo(ax-9,ayTop+4); ctx.lineTo(ax+9,ayTop+4); ctx.closePath(); ctx.fill();
-    // 下箭頭（往下層）在底附近
-    ctx.beginPath(); ctx.moveTo(ax,botY-6); ctx.lineTo(ax-9,botY-18); ctx.lineTo(ax+9,botY-18); ctx.closePath(); ctx.fill();
+    const ax=sx;
+    // 頂端向下箭頭（到上層後往下）
+    const tY=topY-20;
+    ctx.beginPath(); ctx.moveTo(ax,tY+8); ctx.lineTo(ax-9,tY-4); ctx.lineTo(ax+9,tY-4); ctx.closePath(); ctx.fill();
+    // 底端向上箭頭（在下層往上）
+    const bY=botY-8;
+    ctx.beginPath(); ctx.moveTo(ax,bY-14); ctx.lineTo(ax-9,bY-2); ctx.lineTo(ax+9,bY-2); ctx.closePath(); ctx.fill();
     // 提示文字
     if(near){ ctx.fillStyle=active?'#ffdd44':'#eaffff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-      ctx.fillText(player.floorOffset===0?'按 ↑ 上樓':'按 ↓ 下樓', sx, topY-32); ctx.textAlign='left'; }
+      ctx.fillText(player.floorOffset===0?'按 ↑ 上樓':'按 ↓ 下樓', sx, topY-30); ctx.textAlign='left'; }
     ctx.restore();
     if(stairFlash>0)stairFlash--;
   }
@@ -3051,11 +3212,20 @@ function drawWorldTrigger(t){
 }
 
 /* ---- 輸入 ---- */
-window.addEventListener('keydown',e=>{ if(!keys[e.code])justPressed[e.code]=true; keys[e.code]=true;
+function isTyping(){
+  const el=document.activeElement;
+  if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable))return true;
+  // 有任何互動覆蓋層開啟時（檢驗/互動/訊息等），也不接收遊戲按鍵
+  const ovs=['ov-check','ov-interact','ov-msg','ov-embed','ov-backpack','ov-ctab','ov-acq','ov-sys','ov-end'];
+  return ovs.some(id=>{const o=document.getElementById(id);return o&&o.style.display==='flex';});
+}
+window.addEventListener('keydown',e=>{
+  if(isTyping()){ keys={}; justPressed={}; return; }   // 打字/彈窗時清空按鍵狀態，避免殘留移動
+  if(!keys[e.code])justPressed[e.code]=true; keys[e.code]=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
   if(e.code==='KeyX'&&gameState==='play'&&!machineOpen)doTriggerInteract();
 });
-window.addEventListener('keyup',e=>{keys[e.code]=false;});
+window.addEventListener('keyup',e=>{ keys[e.code]=false; });
 
 /* ---- 開始 / 重新開始 ---- */
 function startGame(){

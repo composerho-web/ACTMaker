@@ -17,14 +17,38 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
 
 /* ---- 頂部標題列（儀器銘牌） ---- */
 #nameplate{display:flex;align-items:center;gap:10px;padding:7px 14px;
-  background:linear-gradient(180deg,#12213c,#0b1526);
-  border-bottom:1px solid var(--line);flex:none}
+  background:linear-gradient(180deg,#1a2f52 0%,#12213c 50%,#0b1526 100%);
+  border-bottom:2px solid var(--cyan-dim);flex:none;position:relative;
+  box-shadow:inset 0 1px 0 rgba(127,220,255,.15)}
+#nameplate::after{content:'';position:absolute;left:0;right:0;bottom:-2px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.5}
 #nameplate .led{width:9px;height:9px;border-radius:50%;background:var(--green);
   box-shadow:0 0 8px var(--green);animation:blink 2s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 #nameplate h1{margin:0;font-size:14px;color:var(--cyan);letter-spacing:.5px;flex:1}
 #nameplate .tag{font-size:10.5px;color:var(--muted);border:1px solid var(--line);
   border-radius:10px;padding:2px 8px}
+
+/* ---- 操作目標橫幅（顯眼、機械感） ---- */
+#goalbar{display:flex;align-items:stretch;gap:0;flex:none;
+  background:linear-gradient(90deg,#0a1830,#0d2140 60%,#0a1830);
+  border-bottom:1px solid var(--line);position:relative;overflow:hidden}
+#goalbar::before{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,rgba(251,191,36,.05) 0 12px,transparent 12px 24px);pointer-events:none}
+#goalbar .gicon{display:flex;align-items:center;justify-content:center;
+  min-width:46px;background:linear-gradient(180deg,#1a2f52,#0f1e38);
+  border-right:2px solid var(--amber);font-size:20px;
+  box-shadow:inset 0 0 12px rgba(251,191,36,.25)}
+#goalbar .gbody{flex:1;padding:7px 12px;min-width:0}
+#goalbar .gtitle{font-size:10px;letter-spacing:2px;color:var(--amber);
+  text-transform:uppercase;font-weight:700;display:flex;align-items:center;gap:6px}
+#goalbar .gtitle::after{content:'';flex:1;height:1px;
+  background:linear-gradient(90deg,var(--amber),transparent)}
+#goalbar .gtext{font-size:12.5px;color:#eaf4ff;margin-top:3px;line-height:1.4}
+#goalbar .gpass{font-size:11px;color:var(--green);margin-top:3px;display:flex;align-items:center;gap:5px}
+#goalbar .gpass b{color:#bbf7d0}
+#goalbar .rivet{position:absolute;width:4px;height:4px;border-radius:50%;
+  background:radial-gradient(circle,#5a7ba8,#243a5c);box-shadow:0 0 2px #000}
 
 /* ---- 主體：左儀器 / 右側欄 ---- */
 #body{flex:1;display:flex;min-height:0}
@@ -76,8 +100,10 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
 .rowline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .rowline+.rowline{margin-top:7px}
 
-.knob{display:flex;align-items:center;gap:7px;background:#0f1c33;
-  border:1px solid var(--line);border-radius:8px;padding:5px 9px}
+.knob{display:flex;align-items:center;gap:7px;
+  background:linear-gradient(180deg,#14243f,#0c1728);
+  border:1px solid var(--line);border-top-color:#2a4a72;border-radius:8px;padding:5px 9px;
+  box-shadow:inset 0 1px 0 rgba(127,220,255,.08),0 1px 2px rgba(0,0,0,.3)}
 .knob label{font-size:11px;color:var(--muted);white-space:nowrap}
 .knob input[type=range]{width:110px;-webkit-appearance:none;height:4px;
   background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));border-radius:3px;outline:0}
@@ -93,16 +119,22 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
   width:22px;height:22px;line-height:1;font-size:13px;cursor:pointer;padding:0}
 .step:hover{background:#1e3a5f}
 
-button.btn{background:#1d4ed8;color:#fff;border:0;border-radius:7px;
-  padding:8px 15px;font-size:12.5px;cursor:pointer;letter-spacing:.4px}
-button.btn:hover{background:#2563eb}
-button.btn:disabled{background:#2a3346;color:#6b7a90;cursor:not-allowed}
-button.btn.submit{background:#0e7490;box-shadow:0 0 12px rgba(14,116,144,.5)}
-button.btn.submit:hover{background:#0891b2}
-button.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
-button.btn.ghost:hover{background:#122036;color:var(--cyan)}
-button.btn.apply{background:#166534}
-button.btn.apply:hover{background:#15803d}
+button.btn{background:linear-gradient(180deg,#2a5fd8,#1a3fa0);color:#fff;
+  border:1px solid #3d6fe0;border-top-color:#5b8bff;border-radius:7px;
+  padding:8px 15px;font-size:12.5px;cursor:pointer;letter-spacing:.4px;
+  box-shadow:0 2px 4px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.2)}
+button.btn:hover{background:linear-gradient(180deg,#3570e8,#2350b8);transform:translateY(-1px)}
+button.btn:active{transform:translateY(1px);box-shadow:inset 0 2px 4px rgba(0,0,0,.4)}
+button.btn:disabled{background:#2a3346;color:#6b7a90;cursor:not-allowed;border-color:#333c4e;box-shadow:none;transform:none}
+button.btn.submit{background:linear-gradient(180deg,#12a5c8,#0a7290);border-color:#1cc4e0;
+  border-top-color:#5fdcff;box-shadow:0 0 14px rgba(14,180,220,.45),inset 0 1px 0 rgba(255,255,255,.25);font-weight:600}
+button.btn.submit:hover{background:linear-gradient(180deg,#18b8de,#0c86a8)}
+button.btn.ghost{background:linear-gradient(180deg,#122036,#0c1626);border:1px solid var(--line);color:var(--muted);box-shadow:none}
+button.btn.ghost:hover{background:#16273e;color:var(--cyan);transform:none}
+button.btn.apply{background:linear-gradient(180deg,#1e8a48,#146030);border-color:#25a055;
+  border-top-color:#4ade80;box-shadow:0 0 12px rgba(30,160,80,.4),inset 0 1px 0 rgba(255,255,255,.2)}
+button.btn.apply:hover{background:linear-gradient(180deg,#26a555,#187539)}
+button.btn.apply:disabled{background:#2a3346;box-shadow:none}
 
 /* 檢視切換（分頁鈕） */
 .views{display:flex;gap:4px;background:#0a1426;border:1px solid var(--line);
@@ -147,6 +179,16 @@ function buildInstrument(cfg){
       <h1>${cfg.title}</h1>
       <span class="tag">${cfg.tag||''}</span>
     </div>
+    ${(cfg.goal||cfg.pass)?`<div id="goalbar">
+      <span class="rivet" style="left:6px;top:6px"></span><span class="rivet" style="right:6px;top:6px"></span>
+      <span class="rivet" style="left:6px;bottom:6px"></span><span class="rivet" style="right:6px;bottom:6px"></span>
+      <div class="gicon">🎯</div>
+      <div class="gbody">
+        <div class="gtitle">操作目標 · MISSION</div>
+        ${cfg.goal?`<div class="gtext">${cfg.goal}</div>`:''}
+        ${cfg.pass?`<div class="gpass">✓ 通過條件：<b>${cfg.pass}</b></div>`:''}
+      </div>
+    </div>`:''}
     <div id="body">
       <div id="viewport"><canvas id="cv"></canvas></div>
       <div id="side">

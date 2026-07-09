@@ -16,6 +16,8 @@ const POS=[[2,2],[2,0],[5,0],[5,2]];
 const ui=buildInstrument({
   title:'光學校準模擬儀',
   tag:'Kc-Ⅳ 光的反射',
+  goal:'調整每片鏡子的斜向，讓雷射光束一路反射，最終命中右側的紅色感測器。',
+  pass:'光束成功抵達感測器（命中靶心）',
   brief:'點擊鏡片切換斜向，然後提交驗證',
   readouts:[
     {id:'ro_hits', label:'反射次數'},

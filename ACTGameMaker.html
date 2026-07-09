@@ -270,6 +270,20 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       <div class="form-group"><label>壁紙花紋色</label><input type="color" id="r-wallpaperColor" class="form-control" value="#3a3348" style="height:38px;padding:3px"></div>
       <div class="form-group"><label>地板厚度 (px)</label><input type="number" id="r-floorThickness" class="form-control" value="14" min="2" max="60"></div>
     </div>
+    <div class="hint-note" style="background:#f0f7ff;border-color:#b6d4ea;color:#0369a1">
+      🖼️ <b>整幅牆面圖（選填）</b>：可上傳一張圖鋪滿整面牆（會等比例延伸填滿，覆蓋在上方花紋之下、物件之後）。<br>
+      建議格式：<b>JPG / PNG</b>，比例約 <b>16:9 橫幅</b>，下層牆面建議尺寸 <b>1600 × 390 px</b>（或等比例更大，如 3200×780）。圖片網址請用可直接連到圖檔者（GitHub raw、jsDelivr）。
+    </div>
+    <div class="form-group">
+      <label>下層整幅牆面圖網址</label>
+      <input type="text" id="r-wallImg" class="form-control" placeholder="https://...（留空則使用上方花紋）" oninput="updateSinglePreview(this,'prev-r-wallImg')">
+      <img id="prev-r-wallImg" class="img-preview-box">
+    </div>
+    <div class="form-group" id="r-wallImgUpper-grp">
+      <label>上層整幅牆面圖網址 <span style="font-weight:normal;color:#888;font-size:.85em">（僅樓中樓，建議 1600 × 390 px）</span></label>
+      <input type="text" id="r-wallImgUpper" class="form-control" placeholder="https://...（留空則沿用下層或花紋）" oninput="updateSinglePreview(this,'prev-r-wallImgUpper')">
+      <img id="prev-r-wallImgUpper" class="img-preview-box">
+    </div>
     <div class="form-group">
       <label>🎵 此房間背景音樂 (BGM) 網址 <span style="font-weight:normal;color:#888;font-size:.85em">（可留空）</span></label>
       <input type="text" id="r-bgm" class="form-control" placeholder="https://...">
@@ -680,11 +694,20 @@ let selectedObj=null, draggingObj=null, draggingTrg=null, draggedNode=null, resi
 let currentTHints=[], currentInteractOptions=[], activeMediaArrays={};
 
 /* ---------- 儲存 ---------- */
-function autoSave(){ try{ localStorage.setItem('actmaker_data', JSON.stringify(gameData)); }catch(e){} }
+function autoSave(){ try{ localStorage.setItem('actmaker_data', JSON.stringify(gameData,(k,v)=>k==='_img'||k==='_handle'?undefined:v)); }catch(e){} }
 function autoLoad(){
   try{ const s=localStorage.getItem('actmaker_data');
-    if(s){ gameData=JSON.parse(s); if(!gameData.rooms) gameData.rooms={}; return true; } }catch(e){}
+    if(s){ gameData=JSON.parse(s); if(!gameData.rooms) gameData.rooms={}; rehydrateCustomImages(); return true; } }catch(e){}
   return false;
+}
+/* 重建自訂物件的圖片物件（localStorage 只存得下網址與去背後的 dataURL，無法存 Image 物件） */
+function rehydrateCustomImages(){
+  Object.values(gameData.rooms||{}).forEach(r=>(r.objects||[]).forEach(o=>{
+    if(o.src==='custom'&&o.img){
+      if(o.imgProcessed){ const p=new Image(); p.onload=redrawStage; p.src=o.imgProcessed; o._img=p; }
+      else { const im=new Image(); im.onload=redrawStage; im.onerror=redrawStage; im.src=o.img; o._img=im; }
+    }
+  }));
 }
 
 /* ---------- 系統對話框 ---------- */
@@ -715,6 +738,7 @@ function createNewRoom(){
     id, name:'新房間 '+(Object.keys(gameData.rooms).length+1),
     tall:false, bg:'#26202a', floor:'#3f3348', accent:'#8a5aaa', bgmUrl:'',
     floorThickness:14, wallpaper:'plain', wallpaperColor:'#3a3348',
+    wallImg:'', wallImgUpper:'',
     isStart:isFirst, isEnd:false, endCondition:'arrive',
     preludeStory:'', preludeMedia:[], endStory:'', endMedia:[],
     objects:[], triggers:[],
@@ -770,6 +794,11 @@ function openRoomSettings(){
   document.getElementById('r-wallpaper').value=r.wallpaper||'plain';
   document.getElementById('r-wallpaperColor').value=r.wallpaperColor||'#3a3348';
   document.getElementById('r-floorThickness').value=r.floorThickness||14;
+  document.getElementById('r-wallImg').value=r.wallImg||'';
+  updateSinglePreview(document.getElementById('r-wallImg'),'prev-r-wallImg');
+  document.getElementById('r-wallImgUpper').value=r.wallImgUpper||'';
+  updateSinglePreview(document.getElementById('r-wallImgUpper'),'prev-r-wallImgUpper');
+  document.getElementById('r-wallImgUpper-grp').style.display=r.tall?'block':'none';
   document.getElementById('r-bgm').value=r.bgmUrl||'';
   document.getElementById('r-enemyCount').value=r.enemyCount;
   document.getElementById('r-enemyHp').value=r.enemyHp;
@@ -782,7 +811,9 @@ function openRoomSettings(){
   document.getElementById(r.isStart?'r-isStart':(r.isEnd?'r-isEnd':'r-isNormal')).checked=true;
   document.getElementById('r-tall-note').style.display=r.tall?'block':'none';
   document.getElementById('r-tall').onchange=e=>{
-    document.getElementById('r-tall-note').style.display=e.target.value==='1'?'block':'none';};
+    const isT=e.target.value==='1';
+    document.getElementById('r-tall-note').style.display=isT?'block':'none';
+    document.getElementById('r-wallImgUpper-grp').style.display=isT?'block':'none';};
   toggleEndForm(); openModal('room-modal');
 }
 function toggleEndForm(){
@@ -798,6 +829,8 @@ function saveRoomSettings(){
   r.wallpaper=document.getElementById('r-wallpaper').value;
   r.wallpaperColor=document.getElementById('r-wallpaperColor').value;
   r.floorThickness=parseInt(document.getElementById('r-floorThickness').value)||14;
+  r.wallImg=document.getElementById('r-wallImg').value.trim();
+  r.wallImgUpper=document.getElementById('r-wallImgUpper').value.trim();
   r.bgmUrl=document.getElementById('r-bgm').value;
   r.enemyCount=parseInt(document.getElementById('r-enemyCount').value)||0;
   r.enemyHp=parseInt(document.getElementById('r-enemyHp').value)||60;
@@ -916,6 +949,11 @@ function s2w(sx,sy){ return {x:(sx-stageOffX)/stageScale, y:(sy-stageOffY)/stage
 function editingUpper(){ return document.getElementById('chk-upper').checked; }
 
 /* ===== 壁紙花紋（編輯器與遊戲共用邏輯） ===== */
+const wallImgCache={};
+function getWallImg(url){
+  if(!wallImgCache[url]){ const im=new Image(); im.onload=redrawStage; im.onerror=redrawStage; im.src=url; wallImgCache[url]=im; }
+  return wallImgCache[url];
+}
 function drawWallpaper(c, x, y, w, h, pattern, baseColor, pc, sc){
   if(!pattern||pattern==='plain') return;
   c.save();
@@ -982,6 +1020,15 @@ function redrawStage(){
   const botAll = w2s(0,FLOOR_BOT).y;
   const x0=w2s(0,0).x, x1=w2s(ROOM_W,0).x;
   sctx.fillStyle=r.bg; sctx.fillRect(x0, topAll-2, x1-x0, botAll-topAll+4);
+  // 整幅牆面圖（等比例延伸填滿各樓層牆面）
+  const drawWallImg=(url,off)=>{
+    if(!url) return;
+    const im=getWallImg(url); if(!im.complete||!im.naturalWidth) return;
+    const top=w2s(0,FLOOR_TOP-off).y, bot=w2s(0,FLOOR_BOT-off).y;
+    sctx.drawImage(im, x0, top, x1-x0, bot-top);
+  };
+  if(r.tall) drawWallImg(r.wallImgUpper||r.wallImg, UPPER_RISE);
+  drawWallImg(r.wallImg, 0);
   drawWallpaper(sctx, x0, topAll, x1-x0, botAll-topAll, r.wallpaper||'plain', r.bg, r.wallpaperColor||'#3a3348', stageScale);
 
   const drawFloorBand=(off,label)=>{
@@ -1329,10 +1376,10 @@ function loadCustomObjImage(o){
   im.onload=()=>{
     if(o.removeBg){
       const durl=removeBackground(im, o.tol||40);
-      if(durl){ o.imgProcessed=durl; const p=new Image(); p.onload=redrawStage; p.src=durl; o._img=p; redrawStage(); return; }
+      if(durl){ o.imgProcessed=durl; const p=new Image(); p.onload=redrawStage; p.src=durl; o._img=p; redrawStage(); autoSave(); return; }
       else { sysAlert('⚠️ 此圖片因跨網域限制無法自動去背（伺服器未開放讀取像素）。\n已改用原圖放置。\n建議：使用支援 CORS 的圖床（GitHub raw、jsDelivr）即可啟用去背。'); }
     }
-    o._img=im; redrawStage();
+    o._img=im; redrawStage(); autoSave();
   };
   im.onerror=()=>{
     if(o.removeBg){ // 去背載入失敗（多半是 CORS），退回一般載入
@@ -1996,7 +2043,7 @@ const ROBOT=new Sheet('ROBOT.png',{centers:[96,275,449,615,787,960,1140,1309,147
   rowTops:[56,243,415,599,774,947],rowH:160,cellW:172});
 const SOLDIER_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},
   walk:{row:1,start:0,frames:14,speed:5,loop:true,step:true},
-  run:{row:2,start:0,frames:14,speed:4,loop:true,step:true},jump:{row:2,start:6,frames:4,speed:6,loop:false},
+  run:{row:2,start:0,frames:6,speed:4,loop:true,step:true},jump:{row:2,start:6,frames:4,speed:6,loop:false},
   shoot:{row:3,start:3,frames:8,speed:2,loop:false,fireFrame:4},
   beam:{row:4,start:0,frames:14,speed:2,loop:false,fireFrame:6},
   hurt:{row:5,start:0,frames:5,speed:6,loop:false},defeated:{row:5,start:5,frames:9,speed:7,loop:false}};
@@ -2013,6 +2060,8 @@ const propsImg=new Image(); let propsLoaded=false;
 propsImg.onload=()=>propsLoaded=true; propsImg.src='props2.png';
 const customImgs={};
 function getCustomImg(url){ if(!customImgs[url]){const im=new Image();im.src=url;customImgs[url]=im;} return customImgs[url]; }
+const wallImgs={};
+function getWallImg(url){ if(!wallImgs[url]){const im=new Image();im.src=url;wallImgs[url]=im;} return wallImgs[url]; }
 
 /* ---- 音效（極簡 WebAudio） ---- */
 const SFX=(()=>{
@@ -2136,7 +2185,8 @@ class Player extends Entity{
     this.cd=0; this.shootLock=0; this.charge=0; this.charging=false;}
   update(){
     if(this.isDead)return;
-    const sp=this.speed+speedUp;
+    const running = (keys['ShiftLeft']||keys['ShiftRight']);
+    const sp=(this.speed+speedUp)*(running?1.75:1);
     let moving=false;
     if(this.shootLock<=0){
       if(keys['ArrowLeft']||keys['KeyA']){this.x-=sp;this.dir=-1;moving=true;}
@@ -2167,7 +2217,7 @@ class Player extends Entity{
     // 動畫
     if(this.shootLock>0){/* keep shoot/beam anim */}
     else if(!onGround)this.setAnim('jump');
-    else if(moving)this.setAnim('walk');
+    else if(moving)this.setAnim(running?'run':'walk');
     else this.setAnim('idle');
     this.advance();
     if(this.isHurt&&--this.hurtTimer<=0)this.isHurt=false;
@@ -2716,6 +2766,14 @@ function render(){
   const r=curRoom||{bg:'#111',floor:'#222',accent:'#333'};
   ctx.fillStyle=r.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
   const sc=__renderScale; ctx.setTransform(sc,0,0,sc,0,0);
+  // 整幅牆面圖（等比例延伸填滿各樓層牆面）
+  const drawWallImg=(url,off)=>{
+    if(!url)return; const im=getWallImg(url); if(!im.complete||!im.naturalWidth)return;
+    const top=FLOOR_TOP-off-camera.y, bot=FLOOR_BOT-off-camera.y;
+    ctx.drawImage(im, -camera.x, top, ROOM_W, bot-top);
+  };
+  if(r.tall) drawWallImg(r.wallImgUpper||r.wallImg, UPPER_RISE);
+  drawWallImg(r.wallImg, 0);
   // 牆面壁紙花紋（依房間設定）
   const wallTop=(r.tall?FLOOR_TOP-UPPER_RISE:FLOOR_TOP)-camera.y;
   const wallBot=FLOOR_BOT-camera.y;
@@ -3050,7 +3108,7 @@ function buildGameHTML(isPreview){
 
 <div id="game-viewer">
   <canvas id="game-canvas" width="800" height="450"></canvas>
-  <div class="ctrl-hint">← → / A D 移動 · 空白鍵跳 · Z 射擊${gameData.weapon==='blaster'?' · C 蓄力':''} · X 互動/出入口</div>
+  <div class="ctrl-hint">← → / A D 移動 · Shift 快跑 · 空白鍵跳 · Z 射擊${gameData.weapon==='blaster'?' · C 蓄力':''} · X 互動/出入口</div>
 </div>
 <div id="bp-btn" onclick="openBackpack()">🎒</div>
 ${gameData.customTabEnabled&&gameData.customTabUrl?`<div id="ctab-btn" onclick="openCustomTab()" title="${gameData.customTabName||'資訊'}">📑</div>`:''}

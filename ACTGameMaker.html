@@ -239,7 +239,25 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
     <div class="form-row">
       <div class="form-group"><label>背景色</label><input type="color" id="r-bg" class="form-control" value="#26202a" style="height:38px;padding:3px"></div>
       <div class="form-group"><label>地板色</label><input type="color" id="r-floor" class="form-control" value="#3f3348" style="height:38px;padding:3px"></div>
-      <div class="form-group"><label>裝飾色</label><input type="color" id="r-accent" class="form-control" value="#8a5aaa" style="height:38px;padding:3px"></div>
+      <div class="form-group"><label>裝飾/地平線色</label><input type="color" id="r-accent" class="form-control" value="#8a5aaa" style="height:38px;padding:3px"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>🧱 牆面壁紙主題</label>
+        <select id="r-wallpaper" class="form-control">
+          <option value="plain">純色（單一顏色）</option>
+          <option value="grid">科技格線</option>
+          <option value="stripes">斜向條紋</option>
+          <option value="dots">點陣圖案</option>
+          <option value="vgrad">垂直漸層</option>
+          <option value="hlines">水平掃描線</option>
+          <option value="hex">六角蜂巢</option>
+          <option value="brick">磚牆紋理</option>
+          <option value="circuit">電路板紋路</option>
+          <option value="panels">金屬拼板</option>
+        </select>
+      </div>
+      <div class="form-group"><label>壁紙花紋色</label><input type="color" id="r-wallpaperColor" class="form-control" value="#3a3348" style="height:38px;padding:3px"></div>
+      <div class="form-group"><label>地板厚度 (px)</label><input type="number" id="r-floorThickness" class="form-control" value="14" min="2" max="60"></div>
     </div>
     <div class="form-group">
       <label>🎵 此房間背景音樂 (BGM) 網址 <span style="font-weight:normal;color:#888;font-size:.85em">（可留空）</span></label>
@@ -665,6 +683,7 @@ function createNewRoom(){
   gameData.rooms[id]={
     id, name:'新房間 '+(Object.keys(gameData.rooms).length+1),
     tall:false, bg:'#26202a', floor:'#3f3348', accent:'#8a5aaa', bgmUrl:'',
+    floorThickness:14, wallpaper:'plain', wallpaperColor:'#3a3348',
     isStart:isFirst, isEnd:false, endCondition:'arrive',
     preludeStory:'', preludeMedia:[], endStory:'', endMedia:[],
     objects:[], triggers:[],
@@ -717,6 +736,9 @@ function openRoomSettings(){
   document.getElementById('r-bg').value=r.bg;
   document.getElementById('r-floor').value=r.floor;
   document.getElementById('r-accent').value=r.accent;
+  document.getElementById('r-wallpaper').value=r.wallpaper||'plain';
+  document.getElementById('r-wallpaperColor').value=r.wallpaperColor||'#3a3348';
+  document.getElementById('r-floorThickness').value=r.floorThickness||14;
   document.getElementById('r-bgm').value=r.bgmUrl||'';
   document.getElementById('r-enemyCount').value=r.enemyCount;
   document.getElementById('r-enemyHp').value=r.enemyHp;
@@ -742,6 +764,9 @@ function saveRoomSettings(){
   r.bg=document.getElementById('r-bg').value;
   r.floor=document.getElementById('r-floor').value;
   r.accent=document.getElementById('r-accent').value;
+  r.wallpaper=document.getElementById('r-wallpaper').value;
+  r.wallpaperColor=document.getElementById('r-wallpaperColor').value;
+  r.floorThickness=parseInt(document.getElementById('r-floorThickness').value)||14;
   r.bgmUrl=document.getElementById('r-bgm').value;
   r.enemyCount=parseInt(document.getElementById('r-enemyCount').value)||0;
   r.enemyHp=parseInt(document.getElementById('r-enemyHp').value)||60;
@@ -777,6 +802,7 @@ function setObjSource(s){
   document.getElementById('src-custom').classList.toggle('on',s==='custom');
   document.getElementById('custom-obj-grp').style.display=s==='custom'?'block':'none';
   document.getElementById('obj-lib').style.display=s==='builtin'?'block':'none';
+  if(s==='custom') setMode('object');   // 切到自訂圖片即進入放置模式
 }
 function renderLibGrid(){
   const g=document.getElementById('lib-grid'); g.innerHTML='';
@@ -837,6 +863,55 @@ function w2s(x,y){ return {x:stageOffX+x*stageScale, y:stageOffY+(y+UPPER_RISE)*
 function s2w(sx,sy){ return {x:(sx-stageOffX)/stageScale, y:(sy-stageOffY)/stageScale-UPPER_RISE}; }
 function editingUpper(){ return document.getElementById('chk-upper').checked; }
 
+/* ===== 壁紙花紋（編輯器與遊戲共用邏輯） ===== */
+function drawWallpaper(c, x, y, w, h, pattern, baseColor, pc, sc){
+  if(!pattern||pattern==='plain') return;
+  c.save();
+  c.beginPath(); c.rect(x,y,w,h); c.clip();
+  c.strokeStyle=pc; c.fillStyle=pc; c.globalAlpha=0.5; c.lineWidth=1;
+  const g=Math.max(14, 26*sc);   // 花紋間距
+  if(pattern==='grid'){
+    for(let gx=x; gx<=x+w; gx+=g){ c.beginPath(); c.moveTo(gx,y); c.lineTo(gx,y+h); c.stroke(); }
+    for(let gy=y; gy<=y+h; gy+=g){ c.beginPath(); c.moveTo(x,gy); c.lineTo(x+w,gy); c.stroke(); }
+  } else if(pattern==='stripes'){
+    for(let gx=x-h; gx<=x+w; gx+=g*1.4){ c.beginPath(); c.moveTo(gx,y+h); c.lineTo(gx+h,y); c.stroke(); }
+  } else if(pattern==='dots'){
+    for(let gy=y+g/2; gy<=y+h; gy+=g){ for(let gx=x+g/2; gx<=x+w; gx+=g){
+      c.beginPath(); c.arc(gx,gy,Math.max(1.2,2*sc),0,Math.PI*2); c.fill(); } }
+  } else if(pattern==='vgrad'){
+    const grd=c.createLinearGradient(0,y,0,y+h); grd.addColorStop(0,pc); grd.addColorStop(1,baseColor);
+    c.globalAlpha=0.35; c.fillStyle=grd; c.fillRect(x,y,w,h);
+  } else if(pattern==='hlines'){
+    for(let gy=y; gy<=y+h; gy+=Math.max(4,6*sc)){ c.globalAlpha=0.18; c.beginPath(); c.moveTo(x,gy); c.lineTo(x+w,gy); c.stroke(); }
+  } else if(pattern==='hex'){
+    const s=g*0.7; c.globalAlpha=0.4;
+    for(let row=0,gy=y; gy<=y+h+s; gy+=s*1.5,row++){
+      for(let gx=x+((row%2)?s*0.87:0); gx<=x+w+s; gx+=s*1.74){ hexPath(c,gx,gy,s*0.6); c.stroke(); } }
+  } else if(pattern==='brick'){
+    const bh=g*0.7, bw=g*1.6; c.globalAlpha=0.4;
+    for(let row=0,gy=y; gy<=y+h; gy+=bh,row++){
+      c.beginPath(); c.moveTo(x,gy); c.lineTo(x+w,gy); c.stroke();
+      for(let gx=x+((row%2)?bw/2:0); gx<=x+w; gx+=bw){ c.beginPath(); c.moveTo(gx,gy); c.lineTo(gx,gy+bh); c.stroke(); } }
+  } else if(pattern==='circuit'){
+    c.globalAlpha=0.4;
+    for(let i=0;i<w*h/(g*g*4);i++){
+      const gx=x+Math.floor(Math.random()*(w/g))*g, gy=y+Math.floor(Math.random()*(h/g))*g;
+      c.beginPath(); c.moveTo(gx,gy);
+      if(Math.random()<.5){c.lineTo(gx+g,gy);c.lineTo(gx+g,gy+g);}else{c.lineTo(gx,gy+g);c.lineTo(gx+g,gy+g);}
+      c.stroke(); c.beginPath(); c.arc(gx,gy,Math.max(1,1.5*sc),0,Math.PI*2); c.fill(); }
+  } else if(pattern==='panels'){
+    const pw=g*2.4, ph=g*1.8; c.globalAlpha=0.3;
+    for(let gy=y; gy<=y+h; gy+=ph){ for(let gx=x; gx<=x+w; gx+=pw){
+      c.strokeRect(gx+2,gy+2,pw-4,ph-4);
+      c.beginPath(); c.arc(gx+6,gy+6,Math.max(1,1.5*sc),0,Math.PI*2); c.fill();
+      c.beginPath(); c.arc(gx+pw-6,gy+6,Math.max(1,1.5*sc),0,Math.PI*2); c.fill(); } }
+  }
+  c.restore();
+}
+function hexPath(c,cx,cy,r){ c.beginPath();
+  for(let i=0;i<6;i++){ const a=Math.PI/3*i-Math.PI/6, px=cx+r*Math.cos(a), py=cy+r*Math.sin(a);
+    i?c.lineTo(px,py):c.moveTo(px,py); } c.closePath(); }
+
 function redrawStage(){
   const dpr=Math.min(3, window.devicePixelRatio||1);
   const cssW=stage.width/dpr, cssH=stage.height/dpr;
@@ -850,24 +925,28 @@ function redrawStage(){
   const r=gameData.rooms[currentRoomId];
   sctx.save(); sctx.imageSmoothingEnabled=true;
 
-  // 房間背景（整個牆面）
+  // 房間背景（整個牆面）+ 壁紙花紋
   const topAll = r.tall ? w2s(0,FLOOR_TOP-UPPER_RISE).y : w2s(0,FLOOR_TOP).y;
   const botAll = w2s(0,FLOOR_BOT).y;
   const x0=w2s(0,0).x, x1=w2s(ROOM_W,0).x;
   sctx.fillStyle=r.bg; sctx.fillRect(x0, topAll-2, x1-x0, botAll-topAll+4);
+  drawWallpaper(sctx, x0, topAll, x1-x0, botAll-topAll, r.wallpaper||'plain', r.bg, r.wallpaperColor||'#3a3348', stageScale);
 
   const drawFloorBand=(off,label)=>{
     const top=w2s(0,FLOOR_TOP-off).y, bot=w2s(0,FLOOR_BOT-off).y;
-    // 牆面漸層感（僅地板帶）
-    sctx.fillStyle=r.floor; sctx.fillRect(x0, bot-6*stageScale, x1-x0, 8*stageScale);
-    // 樓層地板線
+    const th=(r.floorThickness||14)*stageScale;
+    // 地板帶（可設厚度與顏色）
+    sctx.fillStyle=r.floor; sctx.fillRect(x0, bot-th, x1-x0, th);
+    // 地板上緣高光
+    sctx.fillStyle='rgba(255,255,255,.10)'; sctx.fillRect(x0, bot-th, x1-x0, Math.max(1,th*0.18));
+    // 地平線（裝飾色）
     sctx.strokeStyle=r.accent; sctx.lineWidth=2;
     sctx.beginPath(); sctx.moveTo(x0,bot); sctx.lineTo(x1,bot); sctx.stroke();
     // 天花板/樓層頂線
     sctx.strokeStyle='rgba(255,255,255,.12)'; sctx.lineWidth=1;
     sctx.beginPath(); sctx.moveTo(x0,top); sctx.lineTo(x1,top); sctx.stroke();
     sctx.fillStyle='rgba(255,255,255,.4)'; sctx.font='12px sans-serif';
-    sctx.fillText(label,x0+6,bot-8);
+    sctx.fillText(label,x0+6,bot-th-4);
   };
   if(r.tall) drawFloorBand(UPPER_RISE,'上層 (牆高 3×角色)');
   drawFloorBand(0,'下層 (牆高 3×角色)');
@@ -1157,7 +1236,10 @@ function placeObject(x,y,floor){
        h:parseInt(document.getElementById('custom-obj-h').value)||120,
        collide:document.getElementById('custom-obj-collide').checked,
        x:Math.round(x),y:Math.round(yy),scale:1,floor};
-    o._img=new Image(); o._img.crossOrigin='anonymous'; o._img.onload=redrawStage; o._img.src=url;
+    o._img=new Image();
+    o._img.onload=redrawStage;
+    o._img.onerror=()=>{ redrawStage(); };
+    o._img.src=url;
   } else {
     if(!selectedProp) return sysAlert('請先在物件庫點選一個物件。');
     const pr=PROPS[selectedProp];
@@ -1195,7 +1277,7 @@ function saveObject(){
   o.collide=document.getElementById('o-collide').checked;
   if(o.src==='custom'){
     const nu=document.getElementById('o-img').value.trim();
-    if(nu!==o.img){ o.img=nu; o._img=new Image(); o._img.crossOrigin='anonymous'; o._img.onload=redrawStage; o._img.src=nu; }
+    if(nu!==o.img){ o.img=nu; o._img=new Image(); o._img.onload=redrawStage; o._img.onerror=redrawStage; o._img.src=nu; }
     o.w=parseInt(document.getElementById('o-w').value)||o.w;
     o.h=parseInt(document.getElementById('o-h').value)||o.h;
   }
@@ -1710,7 +1792,7 @@ function importTXT(ev){
       gameData=JSON.parse(e.target.result);
       if(!gameData.rooms) gameData.rooms={};
       Object.values(gameData.rooms).forEach(r=>r.objects.forEach(o=>{
-        if(o.src==='custom'&&o.img){o._img=new Image();o._img.crossOrigin='anonymous';o._img.onload=redrawStage;o._img.src=o.img;}}));
+        if(o.src==='custom'&&o.img){o._img=new Image();o._img.onload=redrawStage;o._img.src=o.img;}}));
       document.getElementById('game-name').value=gameData.gameName||'';
       autoSave(); renderRoomList();
       const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]);
@@ -1722,7 +1804,7 @@ function importTXT(ev){
 }
 
 /* ================= 內建示範專案 ================= */
-const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 820, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80}}};
+const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80, "wallpaper": "grid", "wallpaperColor": "#2f4a5a", "floorThickness": 16}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80, "wallpaper": "circuit", "wallpaperColor": "#5a5030", "floorThickness": 16}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 820, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80, "wallpaper": "hex", "wallpaperColor": "#3a5a6a", "floorThickness": 16}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80, "wallpaper": "brick", "wallpaperColor": "#5a3040", "floorThickness": 16}}};
 function loadDemo(){
   sysConfirm('載入示範專案「實驗設施保衛戰」？\n這會覆蓋目前的編輯內容（若尚未匯出請先匯出專案）。',()=>{
     gameData=JSON.parse(JSON.stringify(DEMO_PROJECT));
@@ -1799,18 +1881,74 @@ const PROP_SCALES=window.__PROP_SCALES__||{};
 const propsImg=new Image(); let propsLoaded=false;
 propsImg.onload=()=>propsLoaded=true; propsImg.src='props2.png';
 const customImgs={};
-function getCustomImg(url){ if(!customImgs[url]){const im=new Image();im.crossOrigin='anonymous';im.src=url;customImgs[url]=im;} return customImgs[url]; }
+function getCustomImg(url){ if(!customImgs[url]){const im=new Image();im.src=url;customImgs[url]=im;} return customImgs[url]; }
 
 /* ---- 音效（極簡 WebAudio） ---- */
-const SFX=(()=>{let ac=null;function ctx(){if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();return ac;}
-  function beep(f,d,type,vol){try{const c=ctx();const o=c.createOscillator(),g=c.createGain();
-    o.type=type||'square';o.frequency.value=f;g.gain.value=(vol||0.06)*(P.sfxVolume/100);
-    o.connect(g);g.connect(c.destination);o.start();g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+d);
-    o.stop(c.currentTime+d);}catch(e){}}
-  return{shoot:()=>beep(680,0.08,'square'),beam:()=>beep(300,0.35,'sawtooth',0.09),
-    hit:()=>beep(200,0.12,'square'),hurt:()=>beep(160,0.18,'sawtooth',0.08),
-    jump:()=>beep(520,0.12,'sine'),pickup:()=>beep(900,0.15,'sine',0.08),
-    defeat:()=>beep(120,0.4,'sawtooth',0.09),door:()=>beep(440,0.15,'sine')};})();
+const SFX=(()=>{
+  let ac=null;
+  function ctx(){ if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)(); return ac; }
+  function vol(){ return (P.sfxVolume/100); }
+  // 單一振盪器 + ADSR 包絡 + 可選頻率滑音
+  function tone(opt){
+    try{ const c=ctx(), t=c.currentTime;
+      const o=c.createOscillator(), g=c.createGain();
+      o.type=opt.type||'square';
+      o.frequency.setValueAtTime(opt.f0, t);
+      if(opt.f1!=null) o.frequency.exponentialRampToValueAtTime(Math.max(1,opt.f1), t+(opt.sweep||opt.dur));
+      const peak=(opt.vol||0.08)*vol();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(peak, t+(opt.atk||0.005));
+      g.gain.exponentialRampToValueAtTime(0.0001, t+opt.dur);
+      let node=o;
+      if(opt.q){ const flt=c.createBiquadFilter(); flt.type='lowpass'; flt.frequency.value=opt.q;
+        o.connect(flt); flt.connect(g); } else { o.connect(g); }
+      g.connect(c.destination);
+      o.start(t); o.stop(t+opt.dur+0.02);
+    }catch(e){}
+  }
+  // 白噪爆裂（撞擊/爆炸感）
+  function noise(opt){
+    try{ const c=ctx(), t=c.currentTime, n=Math.floor(c.sampleRate*opt.dur);
+      const buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n, opt.decay||2);
+      const src=c.createBufferSource(); src.buffer=buf;
+      const flt=c.createBiquadFilter(); flt.type=opt.filter||'bandpass';
+      flt.frequency.setValueAtTime(opt.f0||800,t);
+      if(opt.f1!=null) flt.frequency.exponentialRampToValueAtTime(Math.max(1,opt.f1), t+opt.dur);
+      flt.Q.value=opt.Q||1;
+      const g=c.createGain(); g.gain.setValueAtTime((opt.vol||0.1)*vol(),t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+opt.dur);
+      src.connect(flt); flt.connect(g); g.connect(c.destination);
+      src.start(t); src.stop(t+opt.dur+0.02);
+    }catch(e){}
+  }
+  return {
+    // 雷射：高頻下滑 + 一點噪音尾
+    shoot(){ tone({type:'square',f0:1400,f1:420,sweep:0.09,dur:0.11,vol:0.07,q:3000});
+             tone({type:'sawtooth',f0:700,f1:300,dur:0.09,vol:0.03}); },
+    // 蓄力光束：厚重上滑 + 低頻墊底
+    beam(){ tone({type:'sawtooth',f0:180,f1:600,sweep:0.3,dur:0.45,vol:0.09,q:1800});
+            tone({type:'square',f0:90,f1:220,dur:0.4,vol:0.05});
+            noise({f0:1200,f1:300,dur:0.35,vol:0.04,filter:'bandpass',Q:0.7}); },
+    // 命中敵人：短促金屬撞擊
+    hit(){ noise({f0:2200,f1:600,dur:0.09,vol:0.09,filter:'bandpass',Q:1.2});
+           tone({type:'square',f0:320,f1:160,dur:0.07,vol:0.05}); },
+    // 玩家受傷：低沉悶擊 + 下滑
+    hurt(){ tone({type:'sawtooth',f0:260,f1:90,sweep:0.18,dur:0.22,vol:0.09,q:900});
+            noise({f0:500,f1:120,dur:0.15,vol:0.06,filter:'lowpass'}); },
+    // 跳躍：快速上滑
+    jump(){ tone({type:'sine',f0:340,f1:720,sweep:0.12,dur:0.14,vol:0.07}); },
+    // 拾取/強化：雙音上行叮咚
+    pickup(){ tone({type:'sine',f0:660,dur:0.1,vol:0.07,atk:0.005});
+              tone({type:'sine',f0:990,dur:0.16,vol:0.06,atk:0.02}); },
+    // 擊倒：爆炸下墜
+    defeat(){ noise({f0:800,f1:60,dur:0.4,vol:0.11,filter:'lowpass',decay:1.5});
+              tone({type:'sawtooth',f0:200,f1:50,sweep:0.35,dur:0.4,vol:0.07,q:600}); },
+    // 門/樓層：氣動滑門
+    door(){ tone({type:'sine',f0:520,f1:300,sweep:0.15,dur:0.18,vol:0.06});
+            noise({f0:1600,f1:400,dur:0.2,vol:0.03,filter:'bandpass',Q:0.6}); }
+  };
+})();
 
 /* ---- 遊戲狀態 ---- */
 const canvas=document.getElementById('game-canvas'), ctx=canvas.getContext('2d');
@@ -2217,6 +2355,33 @@ function useItem(itemId){
     if(box&&document.getElementById('ov-backpack').style.display==='flex') openBackpack();
   }
 }
+/* ---- 背包 / 自訂頁籤（在 runtime 內，可存取 inventory / useItem） ---- */
+function openBackpack(){
+  const box=document.getElementById('bp-list'); box.innerHTML='';
+  if(!inventory.length){ box.innerHTML='<p style="color:#888">背包是空的</p>'; }
+  else inventory.forEach(id=>{
+    const it=P.items.find(i=>i.id===id); if(!it)return;
+    const d=document.createElement('div');
+    d.style.cssText='display:flex;gap:12px;align-items:center;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;transition:background .15s';
+    d.onmouseover=()=>d.style.background='#eef6ff';
+    d.onmouseout=()=>d.style.background='';
+    const act=(it.actionType&&it.actionType!=='none')?'<br><span style="color:#0f4c81;font-size:.8em">👉 點擊使用</span>':'';
+    d.innerHTML='<img src="'+(it.img||'https://placehold.co/50')+'" style="width:50px;height:50px;border-radius:6px;object-fit:cover"><div style="text-align:left"><b>'+it.name+'</b><br><small>'+(it.desc||'')+'</small>'+act+'</div>';
+    d.onclick=()=>useItem(id);
+    box.appendChild(d);
+  });
+  document.getElementById('ov-backpack').style.display='flex';
+}
+function openCustomTab(){
+  document.getElementById('ctab-frame').src=P.customTabUrl;
+  document.getElementById('ctab-newtab').href=P.customTabUrl;
+  document.getElementById('ctab-title').textContent=P.customTabName||'資訊頁籤';
+  document.getElementById('ctab-desc').textContent=P.customTabDesc||'';
+  document.getElementById('ov-ctab').style.display='flex';
+}
+window.__openBackpack=openBackpack;
+window.__openCustomTab=openCustomTab;
+window.useItem=useItem;
 function mediaHTML(u){return /\.(mp4|webm|ogg)$/i.test(u)
   ?`<video src="${u}" controls style="max-width:100%;border-radius:8px"></video>`
   :`<img src="${u}" style="max-width:100%;border-radius:8px">`;}
@@ -2319,11 +2484,66 @@ function loop(){
   render();
   justPressed={};
 }
+/* ===== 壁紙花紋（遊戲執行期） ===== */
+function drawWallpaper(c, x, y, w, h, pattern, baseColor, pc, sc){
+  if(!pattern||pattern==='plain') return;
+  c.save();
+  c.beginPath(); c.rect(x,y,w,h); c.clip();
+  c.strokeStyle=pc; c.fillStyle=pc; c.globalAlpha=0.5; c.lineWidth=1;
+  const g=Math.max(14, 26*sc);
+  if(pattern==='grid'){
+    for(let gx=x; gx<=x+w; gx+=g){ c.beginPath(); c.moveTo(gx,y); c.lineTo(gx,y+h); c.stroke(); }
+    for(let gy=y; gy<=y+h; gy+=g){ c.beginPath(); c.moveTo(x,gy); c.lineTo(x+w,gy); c.stroke(); }
+  } else if(pattern==='stripes'){
+    for(let gx=x-h; gx<=x+w; gx+=g*1.4){ c.beginPath(); c.moveTo(gx,y+h); c.lineTo(gx+h,y); c.stroke(); }
+  } else if(pattern==='dots'){
+    for(let gy=y+g/2; gy<=y+h; gy+=g){ for(let gx=x+g/2; gx<=x+w; gx+=g){
+      c.beginPath(); c.arc(gx,gy,Math.max(1.2,2*sc),0,Math.PI*2); c.fill(); } }
+  } else if(pattern==='vgrad'){
+    const grd=c.createLinearGradient(0,y,0,y+h); grd.addColorStop(0,pc); grd.addColorStop(1,baseColor);
+    c.globalAlpha=0.35; c.fillStyle=grd; c.fillRect(x,y,w,h);
+  } else if(pattern==='hlines'){
+    for(let gy=y; gy<=y+h; gy+=Math.max(4,6*sc)){ c.globalAlpha=0.18; c.beginPath(); c.moveTo(x,gy); c.lineTo(x+w,gy); c.stroke(); }
+  } else if(pattern==='hex'){
+    const s=g*0.7; c.globalAlpha=0.4;
+    for(let row=0,gy=y; gy<=y+h+s; gy+=s*1.5,row++){
+      for(let gx=x+((row%2)?s*0.87:0); gx<=x+w+s; gx+=s*1.74){ hexPath(c,gx,gy,s*0.6); c.stroke(); } }
+  } else if(pattern==='brick'){
+    const bh=g*0.7, bw=g*1.6; c.globalAlpha=0.4;
+    for(let row=0,gy=y; gy<=y+h; gy+=bh,row++){
+      c.beginPath(); c.moveTo(x,gy); c.lineTo(x+w,gy); c.stroke();
+      for(let gx=x+((row%2)?bw/2:0); gx<=x+w; gx+=bw){ c.beginPath(); c.moveTo(gx,gy); c.lineTo(gx,gy+bh); c.stroke(); } }
+  } else if(pattern==='circuit'){
+    c.globalAlpha=0.4;
+    let seed=9973;
+    const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
+    for(let i=0;i<w*h/(g*g*4);i++){
+      const gx=x+Math.floor(rnd()*(w/g))*g, gy=y+Math.floor(rnd()*(h/g))*g;
+      c.beginPath(); c.moveTo(gx,gy);
+      if(rnd()<.5){c.lineTo(gx+g,gy);c.lineTo(gx+g,gy+g);}else{c.lineTo(gx,gy+g);c.lineTo(gx+g,gy+g);}
+      c.stroke(); c.beginPath(); c.arc(gx,gy,Math.max(1,1.5*sc),0,Math.PI*2); c.fill(); }
+  } else if(pattern==='panels'){
+    const pw=g*2.4, ph=g*1.8; c.globalAlpha=0.3;
+    for(let gy=y; gy<=y+h; gy+=ph){ for(let gx=x; gx<=x+w; gx+=pw){
+      c.strokeRect(gx+2,gy+2,pw-4,ph-4);
+      c.beginPath(); c.arc(gx+6,gy+6,Math.max(1,1.5*sc),0,Math.PI*2); c.fill();
+      c.beginPath(); c.arc(gx+pw-6,gy+6,Math.max(1,1.5*sc),0,Math.PI*2); c.fill(); } }
+  }
+  c.restore();
+}
+function hexPath(c,cx,cy,r){ c.beginPath();
+  for(let i=0;i<6;i++){ const a=Math.PI/3*i-Math.PI/6, px=cx+r*Math.cos(a), py=cy+r*Math.sin(a);
+    i?c.lineTo(px,py):c.moveTo(px,py); } c.closePath(); }
+
 function render(){
   ctx.setTransform(1,0,0,1,0,0);
   const r=curRoom||{bg:'#111',floor:'#222',accent:'#333'};
   ctx.fillStyle=r.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
   const sc=__renderScale; ctx.setTransform(sc,0,0,sc,0,0);
+  // 牆面壁紙花紋（依房間設定）
+  const wallTop=(r.tall?FLOOR_TOP-UPPER_RISE:FLOOR_TOP)-camera.y;
+  const wallBot=FLOOR_BOT-camera.y;
+  drawWallpaper(ctx, -camera.x, wallTop, ROOM_W, wallBot-wallTop, r.wallpaper||'plain', r.bg, r.wallpaperColor||'#3a3348', 1);
   // 地板（雙層）
   drawFloorBand(0); if(r.tall)drawFloorBand(UPPER_RISE);
   // 物件（下層先畫）
@@ -2383,9 +2603,15 @@ function render(){
 }
 function drawFloorBand(off){
   const r=curRoom;
-  const y0=FLOOR_TOP-off-camera.y, y1=FLOOR_BOT-off-camera.y;
-  ctx.fillStyle=r.floor;ctx.fillRect(-camera.x,y0,ROOM_W,y1-y0);
-  ctx.strokeStyle=r.accent;ctx.lineWidth=2;ctx.strokeRect(-camera.x,y0,ROOM_W,y1-y0);
+  const bot=FLOOR_BOT-off-camera.y;
+  const th=(r.floorThickness||14);
+  // 地板帶（厚度可設）
+  ctx.fillStyle=r.floor; ctx.fillRect(-camera.x, bot-th, ROOM_W, th);
+  // 上緣高光
+  ctx.fillStyle='rgba(255,255,255,.10)'; ctx.fillRect(-camera.x, bot-th, ROOM_W, Math.max(1,th*0.18));
+  // 地平線（裝飾色）
+  ctx.strokeStyle=r.accent; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-camera.x,bot); ctx.lineTo(ROOM_W-camera.x,bot); ctx.stroke();
 }
 function drawWorldObject(o){
   const off=o.floor?UPPER_RISE:0;
@@ -2703,27 +2929,8 @@ ${gameData.customTabEnabled&&gameData.customTabUrl?`<div id="ctab-btn" onclick="
 window.__PAYLOAD__=${JSON.stringify(payload)};
 window.__PROPS__=${JSON.stringify(PROPS)};
 window.__PROP_SCALES__=${JSON.stringify(PROP_SCALES_RUNTIME)};
-function openBackpack(){var box=document.getElementById('bp-list');box.innerHTML='';
-  if(!inventory.length){box.innerHTML='<p style="color:#888">背包是空的</p>';}
-  else inventory.forEach(function(id){var it=window.__PAYLOAD__.items.find(function(i){return i.id===id;});if(!it)return;
-    var d=document.createElement('div');
-    d.style.cssText='display:flex;gap:12px;align-items:center;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;transition:background .15s';
-    d.onmouseover=function(){d.style.background='#eef6ff';};
-    d.onmouseout=function(){d.style.background='';};
-    var act=(it.actionType&&it.actionType!=='none')?'<br><span style="color:#0f4c81;font-size:.8em">👉 點擊使用</span>':'';
-    d.innerHTML='<img src="'+(it.img||'https://placehold.co/50')+'" style="width:50px;height:50px;border-radius:6px;object-fit:cover"><div style="text-align:left"><b>'+it.name+'</b><br><small>'+(it.desc||'')+'</small>'+act+'</div>';
-    d.onclick=function(){ useItem(id); };
-    box.appendChild(d);
-  });
-  document.getElementById('ov-backpack').style.display='flex';}
-function openCustomTab(){
-  var P=window.__PAYLOAD__;
-  document.getElementById('ctab-frame').src=P.customTabUrl;
-  document.getElementById('ctab-newtab').href=P.customTabUrl;
-  document.getElementById('ctab-title').textContent=P.customTabName||'資訊頁籤';
-  document.getElementById('ctab-desc').textContent=P.customTabDesc||'';
-  document.getElementById('ov-ctab').style.display='flex';
-}
+function openBackpack(){ if(window.__openBackpack) window.__openBackpack(); }
+function openCustomTab(){ if(window.__openCustomTab) window.__openCustomTab(); }
 <\/script>
 <script>eval(decodeURIComponent(escape(atob('${obf}'))));<\/script>
 </body></html>`;

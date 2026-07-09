@@ -576,7 +576,22 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
 
 /* ---------- 常數（與遊戲執行期一致） ---------- */
 const VIEW_W=800, VIEW_H=450, ROOM_W=1600;
-const FLOOR_TOP=250, FLOOR_BOT=430, UPPER_RISE=300;
+const FLOOR_TOP=40, FLOOR_BOT=430, UPPER_RISE=390;
+const CHAR_H=130;   // 角色顯示高度（房間牆高 = 3×角色）
+const GLOBAL_SCALE=0.8;
+// 物件真實比例表（與遊戲執行期一致），供所見即所得繪製
+const PROP_SCALES={"desk_console":1.186,"desk_pipe":0.969,"desk_terminal":0.945,"desk_dualmon":1.135,"monitor":0.698,"monitor_wide":0.691,"tri_monitor":0.659,"hologram_s":0.688,"hologram_m":0.891,"hologram_l":0.887,"L_desk":0.797,"arch_desk":0.911,"stool":0.884,"stool2":0.84,"chair_back":1.074,"keyboard":0.154,"keyboard2":0.143,"tablet":0.053,"tablet2":0.033,"laptop_a":0.296,"laptop_b":0.256,"drive":0.163,"chair_front":0.898,"chair_side":0.967,"laptop_c":0.278,"laptop_d":0.291,"laptop_e":0.278,"laptop_f":0.274,"laptop_flat":0.134,"server_tall":0.785,"server_lit":0.816,"server_rack":0.838,"server_box":0.777,"server_open":0.759,"server_cabinet":0.767,"control_desk":0.971,"control_desk2":1.039,"microscope":0.419,"microscope2":0.473,"centrifuge":0.353,"centrifuge2":0.446,"incubator":1.219,"washer":1.06,"tank_a":1.255,"tank_lit_a":1.467,"tank_b":1.2,"tank_lit_b":1.467,"robot_arm_a":1.143,"robot_arm_b":1.001,"pipes_big":1.582,"pipes_small":1.259,"gas_pair":1.189,"gas_tanks":1.135,"gas_tanks2":1.19,"vial_rack":0.351,"vial_carousel":0.32,"petri":0.11,"petri_stack":0.184,"flask_pair":0.413,"flask_pair2":0.429,"trash":0.656,"trash_open":0.684,"door_slide_a":0.784,"door_slide_b":0.784,"door_arch":0.824,"door_elevator":1.148};
+// 玩家/敵人精靈圖（所見即所得預覽用）
+let previewSprites={};
+function loadPreviewSprites(){
+  const load=(k,src)=>{const im=new Image();im.onload=()=>{previewSprites[k]=im;redrawStage();};im.src=src;};
+  load('player','NEWC.png'); load('enemy','ROBOT.png');
+}
+// 士兵 idle 首幀框架、機器人 idle 首幀框架（供預覽）
+const PREVIEW_FRAME={
+  player:{sx:74-72,sy:0,sw:144,sh:151},     // NEWC row0 col0
+  enemy:{sx:96-86,sy:56,sw:172,sh:160}      // ROBOT row0 col0
+};
 
 /* ---------- 可用機台（8 台） ---------- */
 const MACHINES = {
@@ -611,7 +626,7 @@ function newGameData(){
 }
 let currentRoomId=null, activeView='room', editMode='select', objSource='builtin';
 let selectedProp=null, addTrgPending=false;
-let selectedObj=null, draggingObj=null, draggingTrg=null, draggedNode=null;
+let selectedObj=null, draggingObj=null, draggingTrg=null, draggedNode=null, resizingObj=null;
 let currentTHints=[], currentInteractOptions=[], activeMediaArrays={};
 
 /* ---------- 儲存 ---------- */
@@ -822,30 +837,92 @@ function redrawStage(){
   const r=gameData.rooms[currentRoomId];
   sctx.save(); sctx.imageSmoothingEnabled=false;
 
+  // 房間背景（整個牆面）
+  const topAll = r.tall ? w2s(0,FLOOR_TOP-UPPER_RISE).y : w2s(0,FLOOR_TOP).y;
+  const botAll = w2s(0,FLOOR_BOT).y;
+  const x0=w2s(0,0).x, x1=w2s(ROOM_W,0).x;
+  sctx.fillStyle=r.bg; sctx.fillRect(x0, topAll-2, x1-x0, botAll-topAll+4);
+
   const drawFloorBand=(off,label)=>{
-    const a=w2s(0,FLOOR_TOP-off), b=w2s(ROOM_W,FLOOR_BOT-off);
-    sctx.fillStyle=r.bg; sctx.fillRect(a.x,w2s(0,-off-140).y,(b.x-a.x),(a.y-w2s(0,-off-140).y));
-    sctx.fillStyle=r.floor; sctx.fillRect(a.x,a.y,b.x-a.x,b.y-a.y);
-    sctx.strokeStyle=r.accent; sctx.lineWidth=2; sctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);
-    sctx.fillStyle='rgba(255,255,255,.35)'; sctx.font=`${12}px sans-serif`;
-    sctx.fillText(label,a.x+6,a.y-6);
+    const top=w2s(0,FLOOR_TOP-off).y, bot=w2s(0,FLOOR_BOT-off).y;
+    // 牆面漸層感（僅地板帶）
+    sctx.fillStyle=r.floor; sctx.fillRect(x0, bot-6*stageScale, x1-x0, 8*stageScale);
+    // 樓層地板線
+    sctx.strokeStyle=r.accent; sctx.lineWidth=2;
+    sctx.beginPath(); sctx.moveTo(x0,bot); sctx.lineTo(x1,bot); sctx.stroke();
+    // 天花板/樓層頂線
+    sctx.strokeStyle='rgba(255,255,255,.12)'; sctx.lineWidth=1;
+    sctx.beginPath(); sctx.moveTo(x0,top); sctx.lineTo(x1,top); sctx.stroke();
+    sctx.fillStyle='rgba(255,255,255,.4)'; sctx.font='12px sans-serif';
+    sctx.fillText(label,x0+6,bot-8);
   };
-  if(r.tall) drawFloorBand(UPPER_RISE,'上層');
-  drawFloorBand(0,'下層');
+  if(r.tall) drawFloorBand(UPPER_RISE,'上層 (牆高 3×角色)');
+  drawFloorBand(0,'下層 (牆高 3×角色)');
+
+  // 樓中樓樓梯色塊（與遊戲一致，自動補齊）
+  if(r.tall) drawEditorStair(r);
 
   // 物件（依樓層與 y 排序）
   const objs=[...r.objects].sort((a,b)=>(a.floor-b.floor)||(a.y-b.y));
   objs.forEach(o=>drawObject(o, o.id===selectedObj));
   // 觸發點
   r.triggers.forEach(t=>drawTrigger(t));
+  // 範例玩家與敵人（所見即所得 · 半透明參考）
+  drawSampleActors(r);
 
   sctx.restore();
+}
+// 觸發點標記在畫面上的中心（與繪製一致）
+function trgMarkerPos(t){
+  const off=t.floor?UPPER_RISE:0;
+  const baseY=w2s(0,FLOOR_BOT-off).y;
+  const p=w2s(t.x,0);
+  if(t.type==='portal'){
+    const h=Math.min(CHAR_H*1.4,FLOOR_BOT-FLOOR_TOP-8)*stageScale;
+    return {x:p.x, y:baseY-h/2, r:Math.max(22,h/2)};
+  }
+  return {x:p.x, y:baseY-CHAR_H*0.65*stageScale, r:15};
+}
+function drawEditorStair(r){
+  const sx=w2s(ROOM_W-140,0).x, sw=130*stageScale;
+  const topY=w2s(0,FLOOR_BOT-UPPER_RISE).y, botY=w2s(0,FLOOR_BOT).y;
+  const g=sctx.createLinearGradient(0,topY,0,botY);
+  g.addColorStop(0,r.accent); g.addColorStop(1,r.floor);
+  sctx.fillStyle=g; sctx.globalAlpha=0.9;
+  sctx.fillRect(sx-sw/2,topY-6,sw,botY-topY+6); sctx.globalAlpha=1;
+  sctx.strokeStyle='rgba(255,255,255,.35)'; sctx.lineWidth=1.5;
+  const steps=8, sh=(botY-topY)/steps;
+  for(let i=1;i<steps;i++){const yy=topY+i*sh;
+    sctx.beginPath();sctx.moveTo(sx-sw/2,yy);sctx.lineTo(sx-sw/2+sw*(i/steps),yy);sctx.stroke();}
+  sctx.strokeStyle=r.accent;sctx.lineWidth=2;sctx.strokeRect(sx-sw/2,topY-6,sw,botY-topY+6);
+  sctx.fillStyle='rgba(255,255,255,.8)';sctx.font='11px sans-serif';sctx.textAlign='center';
+  sctx.fillText('▲▼ 樓梯(自動)',sx,botY-8);sctx.textAlign='left';
+}
+function drawSampleActor(kind,x,floor){
+  const off=floor?UPPER_RISE:0;
+  const p=w2s(x,-off);
+  const fr=PREVIEW_FRAME[kind], im=previewSprites[kind];
+  const dh=CHAR_H*stageScale, dw=(fr.sw/fr.sh)*dh;
+  sctx.globalAlpha=0.5;
+  if(im){ sctx.imageSmoothingEnabled=false;
+    sctx.drawImage(im,fr.sx,fr.sy,fr.sw,fr.sh,p.x-dw/2,p.y-dh,dw,dh); }
+  else { sctx.fillStyle=kind==='player'?'rgba(80,160,220,.5)':'rgba(220,80,80,.5)';
+    sctx.fillRect(p.x-dw/2,p.y-dh,dw,dh); }
+  sctx.globalAlpha=1;
+  sctx.fillStyle=kind==='player'?'#4dabf7':'#ff6b6b';
+  sctx.font='10px sans-serif';sctx.textAlign='center';
+  sctx.fillText(kind==='player'?'玩家(範例)':'敵人',p.x,p.y+12);sctx.textAlign='left';
+}
+function drawSampleActors(r){
+  drawSampleActor('player',120,0);
+  const n=Math.min(r.enemyCount||0,3);
+  for(let i=0;i<n;i++) drawSampleActor('enemy',500+i*260,0);
 }
 function drawObject(o, sel){
   const off = o.floor? UPPER_RISE : 0;
   const p = w2s(o.x, o.y-off);
-  const dim = objDim(o);
-  const dw=dim.w*o.scale*stageScale, dh=dim.h*o.scale*stageScale;
+  const dim = objDim(o);   // 已含真實比例與 o.scale
+  const dw=dim.w*stageScale, dh=dim.h*stageScale;
   const dx=p.x-dw/2, dy=p.y-dh;
   const dimAlpha = (r=>{ const up=editingUpper(); return (o.floor===1)===up ? 1 : 0.35; })();
   sctx.globalAlpha=dimAlpha;
@@ -860,44 +937,83 @@ function drawObject(o, sel){
     sctx.fillText(o.prop||'物件', p.x, p.y-dh/2); sctx.textAlign='left';
   }
   if(o.collide){ sctx.strokeStyle='rgba(32,201,151,.75)'; sctx.lineWidth=1.5; sctx.strokeRect(dx,dy,dw,dh); }
-  if(sel){ sctx.strokeStyle='#ffd43b'; sctx.lineWidth=2.5; sctx.strokeRect(dx-2,dy-2,dw+4,dh+4); }
+  if(sel){
+    sctx.strokeStyle='#ffd43b'; sctx.lineWidth=2.5; sctx.strokeRect(dx-2,dy-2,dw+4,dh+4);
+    // 右下角縮放把手
+    sctx.fillStyle='#ffd43b'; sctx.strokeStyle='#7a5a00'; sctx.lineWidth=1.5;
+    sctx.fillRect(dx+dw-6,dy+dh-6,14,14); sctx.strokeRect(dx+dw-6,dy+dh-6,14,14);
+    sctx.fillStyle='#7a5a00'; sctx.font='9px sans-serif'; sctx.textAlign='center';
+    sctx.fillText('⤡',dx+dw+1,dy+dh+4); sctx.textAlign='left';
+    // 縮放比例標籤
+    sctx.fillStyle='rgba(0,0,0,.7)'; sctx.fillRect(dx,dy-18,52,15);
+    sctx.fillStyle='#ffd43b'; sctx.font='10px sans-serif';
+    sctx.fillText('×'+(o.scale||1).toFixed(2),dx+4,dy-6);
+    o._handle={x:dx+dw+1,y:dy+dh+1};   // 記錄把手位置供命中判定
+  }
   sctx.globalAlpha=1;
 }
+// 與遊戲執行期一致的物件實際顯示尺寸（含真實比例表）
 function objDim(o){
-  if(o.src==='builtin'&&PROPS[o.prop]) return {w:PROPS[o.prop].w,h:PROPS[o.prop].h};
-  return {w:o.w||120,h:o.h||120};
+  if(o.src==='builtin'&&PROPS[o.prop]){
+    const p=PROPS[o.prop];
+    const s=(PROP_SCALES[o.prop]||0.6)*GLOBAL_SCALE*(o.scale||1);
+    return {w:p.w*s,h:p.h*s};
+  }
+  return {w:(o.w||120)*(o.scale||1),h:(o.h||120)*(o.scale||1)};
 }
-const TRG_ICON={portal:'⬆️',info:'ℹ️',embed:'🔗',check:'❓',interact:'💬',machine:'⚗️'};
-const TRG_COLOR={portal:'#4dabf7',info:'#69db7c',embed:'#ffd43b',check:'#ff922b',interact:'#da77f2',machine:'#9775fa'};
+const TRG_ICON={portal:'⬆',info:'ℹ',embed:'🔗',check:'?',interact:'💬',machine:'⚗'};
 function drawTrigger(t){
   const off=t.floor?UPPER_RISE:0;
-  const p=w2s(t.x, t.y-off);
   const up=editingUpper();
-  sctx.globalAlpha=((t.floor===1)===up)?1:0.35;
-  // 觸發範圍
-  sctx.beginPath(); sctx.arc(p.x,p.y,(t.radius||70)*stageScale,0,Math.PI*2);
-  sctx.fillStyle=TRG_COLOR[t.type]+'22'; sctx.fill();
-  sctx.strokeStyle=TRG_COLOR[t.type]; sctx.lineWidth=1.5; sctx.setLineDash([5,4]); sctx.stroke(); sctx.setLineDash([]);
-  // 標記
-  sctx.beginPath(); sctx.arc(p.x,p.y,13,0,Math.PI*2);
-  sctx.fillStyle=TRG_COLOR[t.type]; sctx.fill();
-  sctx.strokeStyle='#fff'; sctx.lineWidth=2; sctx.stroke();
-  sctx.font='13px sans-serif'; sctx.textAlign='center'; sctx.textBaseline='middle';
-  sctx.fillText(TRG_ICON[t.type],p.x,p.y+1);
-  sctx.textBaseline='alphabetic';
-  sctx.fillStyle='rgba(0,0,0,.65)';
+  sctx.globalAlpha=((t.floor===1)===up)?1:0.3;
+  const baseY=w2s(0,FLOOR_BOT-off).y;
+  const p=w2s(t.x, t.y-off);
+
+  if(t.type==='portal'){
+    // 穿越點：發光方色塊 + 箭頭（與遊戲一致）
+    const w=44*stageScale, h=Math.min(CHAR_H*1.4,FLOOR_BOT-FLOOR_TOP-8)*stageScale;
+    const bx=p.x-w/2, by=baseY-h;
+    const dirLeft=t.x>ROOM_W/2;
+    const grd=sctx.createLinearGradient(bx,by,bx,by+h);
+    grd.addColorStop(0,'#bfefff'); grd.addColorStop(1,'#4dabf7');
+    sctx.fillStyle=grd; sctx.globalAlpha*=0.7; sctx.fillRect(bx,by,w,h); sctx.globalAlpha=((t.floor===1)===up)?1:0.3;
+    sctx.strokeStyle='#e6fbff'; sctx.lineWidth=2; sctx.strokeRect(bx,by,w,h);
+    sctx.fillStyle='#fff';
+    const ay=by+h/2, aw=13*stageScale;
+    sctx.beginPath();
+    if(dirLeft){sctx.moveTo(p.x-aw,ay);sctx.lineTo(p.x+aw*0.5,ay-14*stageScale);sctx.lineTo(p.x+aw*0.5,ay+14*stageScale);}
+    else{sctx.moveTo(p.x+aw,ay);sctx.lineTo(p.x-aw*0.5,ay-14*stageScale);sctx.lineTo(p.x-aw*0.5,ay+14*stageScale);}
+    sctx.closePath();sctx.fill();
+    sctx.fillStyle='#fff';sctx.font='10px sans-serif';sctx.textAlign='center';
+    sctx.fillText(t.title,p.x,by-5);sctx.textAlign='left';
+    // 觸發半徑（編輯輔助，淡）
+    sctx.strokeStyle='rgba(127,220,255,.4)';sctx.setLineDash([5,4]);sctx.lineWidth=1;
+    sctx.beginPath();sctx.arc(p.x,baseY-CHAR_H*0.5*stageScale,(t.radius||70)*stageScale,0,Math.PI*2);sctx.stroke();sctx.setLineDash([]);
+    sctx.globalAlpha=1; return;
+  }
+
+  // 其他觸發點：黑白（遊戲中會閃動）
+  const my=baseY-CHAR_H*0.65*stageScale;
+  sctx.strokeStyle='rgba(120,120,120,.5)';sctx.setLineDash([5,4]);sctx.lineWidth=1;
+  sctx.beginPath();sctx.arc(p.x,my,(t.radius||70)*stageScale,0,Math.PI*2);sctx.stroke();sctx.setLineDash([]);
+  sctx.beginPath();sctx.arc(p.x,my,13,0,Math.PI*2);
+  sctx.fillStyle='#111';sctx.fill();
+  sctx.strokeStyle='#f5f5f5';sctx.lineWidth=2;sctx.stroke();
+  sctx.fillStyle='#f5f5f5';sctx.font='bold 13px sans-serif';sctx.textAlign='center';sctx.textBaseline='middle';
+  sctx.fillText(TRG_ICON[t.type],p.x,my+1);sctx.textBaseline='alphabetic';
+  sctx.fillStyle='rgba(0,0,0,.7)';
   const lw=sctx.measureText(t.title).width+10;
-  sctx.fillRect(p.x-lw/2,p.y+16,lw,15);
-  sctx.fillStyle='#fff'; sctx.font='10px sans-serif';
-  sctx.fillText(t.title,p.x,p.y+27);
-  sctx.textAlign='left'; sctx.globalAlpha=1;
+  sctx.fillRect(p.x-lw/2,my+16,lw,15);
+  sctx.fillStyle='#fff';sctx.font='10px sans-serif';
+  sctx.fillText(t.title,p.x,my+27);
+  sctx.textAlign='left';sctx.globalAlpha=1;
 }
 function updateStageInfo(){
   const el=document.getElementById('stage-info');
   if(!currentRoomId){el.textContent='';return;}
   const r=gameData.rooms[currentRoomId];
   el.innerHTML=`房間：<b>${r.name}</b>　物件 ${r.objects.length}　觸發點 ${r.triggers.length}　敵人 ${r.enemyCount}（HP ${r.enemyHp}）<br>
-    房間寬 ${ROOM_W}px　地板 y ${FLOOR_TOP}~${FLOOR_BOT}${r.tall?'　上層偏移 '+UPPER_RISE:''}`;
+    <span style="color:#8fd">選取物件後：拖曳黃色把手 或 滾輪 可等比例縮放</span>　房間牆高＝角色 3 倍${r.tall?'（樓中樓再加 3 倍）':''}`;
 }
 
 /* ---------- 舞台互動 ---------- */
@@ -913,16 +1029,26 @@ stage.addEventListener('mousedown',e=>{
   if(editMode==='object'){ placeObject(w.x, wy, up?1:0); return; }
   if(editMode==='trigger'){ placeTrigger(w.x, wy, up?1:0); return; }
 
+  // 先檢查是否抓到「縮放把手」
+  if(editMode==='select'&&selectedObj){
+    const so=r.objects.find(x=>x.id===selectedObj);
+    if(so&&so._handle&&Math.hypot(sx-so._handle.x,sy-so._handle.y)<12){
+      const d=objDim(so);
+      resizingObj={o:so, startX:sx, startScale:so.scale||1, baseW:d.w/(so.scale||1)};
+      return;
+    }
+  }
+
   // 命中測試（先觸發點後物件）
   const hitT = r.triggers.slice().reverse().find(t=>{
     if((t.floor===1)!==up) return false;
-    const p=w2s(t.x,t.y-(t.floor?UPPER_RISE:0));
-    return Math.hypot(sx-p.x,sy-p.y)<15;
+    const m=trgMarkerPos(t);
+    return Math.hypot(sx-m.x,sy-m.y)<m.r;
   });
   const hitO = !hitT && r.objects.slice().reverse().find(o=>{
     if((o.floor===1)!==up) return false;
     const off=o.floor?UPPER_RISE:0, p=w2s(o.x,o.y-off), d=objDim(o);
-    const dw=d.w*o.scale*stageScale, dh=d.h*o.scale*stageScale;
+    const dw=d.w*stageScale, dh=d.h*stageScale;
     return sx>=p.x-dw/2&&sx<=p.x+dw/2&&sy>=p.y-dh&&sy<=p.y;
   });
 
@@ -938,6 +1064,17 @@ stage.addEventListener('mousedown',e=>{
   }
 });
 stage.addEventListener('mousemove',e=>{
+  if(resizingObj){
+    const rect=stage.getBoundingClientRect();
+    const sx=e.clientX-rect.left;
+    const o=resizingObj.o;
+    const dpx=(sx-resizingObj.startX);
+    const curW=resizingObj.baseW*resizingObj.startScale*stageScale;
+    const ns=Math.max(0.15,Math.min(4, resizingObj.startScale*(1+dpx/Math.max(30,curW))));
+    o.scale=Math.round(ns*100)/100;
+    redrawStage(); updateStageInfo();
+    return;
+  }
   if(!draggingObj&&!draggingTrg) return;
   const rect=stage.getBoundingClientRect();
   const w=s2w(e.clientX-rect.left, e.clientY-rect.top);
@@ -949,9 +1086,19 @@ stage.addEventListener('mousemove',e=>{
   redrawStage();
 });
 window.addEventListener('mouseup',()=>{
-  if(draggingObj||draggingTrg){ autoSave(); }
-  draggingObj=null; draggingTrg=null;
+  if(draggingObj||draggingTrg||resizingObj){ autoSave(); }
+  draggingObj=null; draggingTrg=null; resizingObj=null;
 });
+// 滾輪等比例縮放選中的物件
+stage.addEventListener('wheel',e=>{
+  if(editMode!=='select'||!selectedObj)return;
+  e.preventDefault();
+  const r=gameData.rooms[currentRoomId];
+  const o=r.objects.find(x=>x.id===selectedObj); if(!o)return;
+  o.scale=Math.max(0.15,Math.min(4,(o.scale||1)*(e.deltaY<0?1.08:0.93)));
+  o.scale=Math.round(o.scale*100)/100;
+  redrawStage(); updateStageInfo(); autoSave();
+},{passive:false});
 stage.addEventListener('dblclick',e=>{
   if(!currentRoomId) return;
   const rect=stage.getBoundingClientRect();
@@ -959,13 +1106,13 @@ stage.addEventListener('dblclick',e=>{
   const up=editingUpper(); const r=gameData.rooms[currentRoomId];
   const hitT=r.triggers.slice().reverse().find(t=>{
     if((t.floor===1)!==up) return false;
-    const p=w2s(t.x,t.y-(t.floor?UPPER_RISE:0));
-    return Math.hypot(sx-p.x,sy-p.y)<15;});
+    const m=trgMarkerPos(t);
+    return Math.hypot(sx-m.x,sy-m.y)<m.r;});
   if(hitT) return editTrigger(hitT.id);
   const hitO=r.objects.slice().reverse().find(o=>{
     if((o.floor===1)!==up) return false;
     const off=o.floor?UPPER_RISE:0,p=w2s(o.x,o.y-off),d=objDim(o);
-    const dw=d.w*o.scale*stageScale,dh=d.h*o.scale*stageScale;
+    const dw=d.w*stageScale,dh=d.h*stageScale;
     return sx>=p.x-dw/2&&sx<=p.x+dw/2&&sy>=p.y-dh&&sy<=p.y;});
   if(hitO) editObject(hitO.id);
 });
@@ -1549,7 +1696,7 @@ function importTXT(ev){
 }
 
 /* ================= 內建示範專案 ================= */
-const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 730, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 730, "scale": 1, "floor": 1}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 410, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80}}};
+const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "desk_console", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "tri_monitor", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "server_rack", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "hologram_m", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "trash", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "control_desk", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "control_desk2", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "microscope", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "centrifuge", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "vial_rack", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "flask_pair", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "server_open", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "pipes_big", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "desk_terminal", "collide": true, "x": 700, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "hologram_l", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 820, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "server_cabinet", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "robot_arm_b", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "gas_tanks", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80}}};
 function loadDemo(){
   sysConfirm('載入示範專案「實驗設施保衛戰」？\n這會覆蓋目前的編輯內容（若尚未匯出請先匯出專案）。',()=>{
     gameData=JSON.parse(JSON.stringify(DEMO_PROJECT));
@@ -1586,7 +1733,7 @@ window.addEventListener('load',()=>{
   renderRoomList();
   const ks=Object.keys(gameData.rooms);
   if(ks.length) selectRoom(ks[0]); else createNewRoom();
-  loadProps(); resizeStage();
+  loadProps(); loadPreviewSprites(); resizeStage();
 });
 </script>
 <script id="raw-runtime" type="text/plain">
@@ -1596,8 +1743,9 @@ window.addEventListener('load',()=>{
    ================================================================ */
 const P = window.__PAYLOAD__;
 const IS_PREVIEW = !!P.isPreview;
-const VIEW_W=800, VIEW_H=450, ROOM_W=1600, FLOOR_TOP=250, FLOOR_BOT=430, UPPER_RISE=300;
+const VIEW_W=800, VIEW_H=450, ROOM_W=1600, FLOOR_TOP=40, FLOOR_BOT=430, UPPER_RISE=390;
 const GRAV=0.8, GLOBAL_SCALE=0.8;
+const CHAR_H=130;   // 角色目標顯示高度（房間牆高 390 = 3×角色）
 
 /* ---- 精靈圖框架（與原遊戲一致） ---- */
 function Sheet(src,cfg){this.c=cfg.centers;this.t=cfg.rowTops;this.rh=cfg.rowH;this.rhs=cfg.rowHeights||null;
@@ -1673,7 +1821,8 @@ class Entity{
       else if(a.loop)this.frame=0;else this.frameDone=true;}}
   draw(){const a=this.anims[this.anim];if(!a||!this.sheet.loaded)return;
     const r=this.sheet.rect(a.row,acol(a,this.frame));
-    const sc=(VIEW_H/ r.sh)*0.62*GLOBAL_SCALE*1.5;
+    // 角色縮放：使顯示高度固定為 CHAR_H（房間牆高的 1/3）
+    const sc=CHAR_H/r.sh;
     const dw=r.sw*sc, dh=r.sh*sc;
     const gy=groundYFor(this)-this.z;
     const sx=this.x-camera.x, sy=gy-camera.y;
@@ -1689,7 +1838,7 @@ function groundYFor(e){ return FLOOR_BOT - e.floorOffset; }
 class Player extends Entity{
   constructor(x){super(x,SOLDIER,SOLDIER_ANIM);
     this.speed=P.playerSpeed; this.maxHp=P.playerHp; this.hp=P.playerHp;
-    this.cd=0; this.shootLock=0;}
+    this.cd=0; this.shootLock=0; this.charge=0; this.charging=false;}
   update(){
     if(this.isDead)return;
     const sp=this.speed+speedUp;
@@ -1712,8 +1861,14 @@ class Player extends Entity{
     if(this.cd>0)this.cd--;
     if(this.shootLock>0){this.shootLock--;}
     const canShoot=this.vz===0&&this.z<=this.onPlatform+0.5;
-    if(justPressed['KeyZ']&&this.cd<=0&&canShoot){this.shoot(false);}
-    if(justPressed['KeyC']&&this.cd<=0&&canShoot&&P.weapon==='blaster'){this.shoot(true);}
+    if(justPressed['KeyZ']&&this.cd<=0&&canShoot&&!this.charging){this.shoot(false);}
+    // 蓄力：按住 C 累積，放開時發射（光束槍限定）
+    if(P.weapon==='blaster'&&canShoot){
+      if(keys['KeyC']&&this.cd<=0){ this.charging=true; this.charge=Math.min(100,this.charge+2.2); this.setAnim('idle'); }
+      else if(this.charging){ // 放開 → 發射
+        this.shoot(true, this.charge); this.charging=false; this.charge=0;
+      }
+    }
     // 動畫
     if(this.shootLock>0){/* keep shoot/beam anim */}
     else if(!onGround)this.setAnim('jump');
@@ -1725,12 +1880,14 @@ class Player extends Entity{
     if(regenUp>0&&++regenTick>=60){regenTick=0;this.hp=Math.min(this.maxHp,this.hp+regenUp*2);}
     if(shieldMax>0&&!this.isHurt&&shieldCur<shieldMax&&++shieldTick>=90){shieldTick=0;shieldCur=Math.min(shieldMax,shieldCur+5);}
   }
-  shoot(charge){
+  shoot(charge,level){
     const base=P.weaponDmg+attackUp;
     const cd=Math.max(4,(P.weaponCd)-firerateUp*2);
-    if(charge){this.setAnim('beam');this.shootLock=14;this.cd=cd*2;SFX.beam();
-      setTimeout(()=>spawnProj(this,base*3,true),120);}
-    else{this.setAnim('shoot');this.shootLock=8;this.cd=cd;SFX.shoot();
+    if(charge){
+      const mult=1.5+(level||0)/100*2.5;   // 蓄力 0→100 對應 1.5×→4×傷害
+      this.setAnim('beam');this.shootLock=14;this.cd=cd*2;SFX.beam();
+      setTimeout(()=>spawnProj(this,base*mult,true),120);
+    } else {this.setAnim('shoot');this.shootLock=8;this.cd=cd;SFX.shoot();
       setTimeout(()=>spawnProj(this,base,false),90);}
   }
   hurt(dmg,dir){
@@ -2079,8 +2236,10 @@ function tickTimer(){ if(gameState!=='play')return; timeLeft--;
 }
 
 /* ---- 主迴圈 ---- */
+let blinkPhase=0;
 function loop(){
   requestAnimationFrame(loop);
+  blinkPhase++;
   if(gameState!=='play'){ justPressed={}; return; }
   if(!machineOpen){
     player.update();
@@ -2111,17 +2270,45 @@ function render(){
   // 物件（下層先畫）
   const objs=[...(r.objects||[])].sort((a,b)=>((a.floor?1:0)-(b.floor?1:0))||(a.y-b.y));
   objs.forEach(drawWorldObject);
-  // 樓中樓樓梯提示
-  if(r.tall){const sx=ROOM_W-140-camera.x; ctx.fillStyle='rgba(127,220,255,.15)';
-    ctx.fillRect(sx-65,FLOOR_TOP-camera.y-UPPER_RISE,130,UPPER_RISE+180);
-    ctx.fillStyle='rgba(127,220,255,.7)';ctx.font='12px sans-serif';ctx.textAlign='center';
-    ctx.fillText('樓梯 ↑↓',sx,FLOOR_BOT-camera.y-10);ctx.textAlign='left';}
+  // 樓中樓樓梯：自動用色塊補齊（從下層地板貫穿到上層地板）
+  if(r.tall){
+    const sx=ROOM_W-140-camera.x, sw=130;
+    const topY=FLOOR_BOT-UPPER_RISE-camera.y;   // 上層地板面
+    const botY=FLOOR_BOT-camera.y;              // 下層地板面
+    // 樓梯主體色塊
+    const grd=ctx.createLinearGradient(0,topY,0,botY);
+    grd.addColorStop(0,r.accent); grd.addColorStop(1,r.floor);
+    ctx.fillStyle=grd; ctx.globalAlpha=0.9;
+    ctx.fillRect(sx-sw/2,topY-6,sw,botY-topY+6);
+    ctx.globalAlpha=1;
+    // 階梯紋路
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
+    const steps=8, sh=(botY-topY)/steps;
+    for(let i=1;i<steps;i++){ const yy=topY+i*sh;
+      ctx.beginPath(); ctx.moveTo(sx-sw/2,yy); ctx.lineTo(sx-sw/2+sw*(i/steps),yy); ctx.stroke(); }
+    ctx.strokeStyle=r.accent; ctx.lineWidth=2; ctx.strokeRect(sx-sw/2,topY-6,sw,botY-topY+6);
+    ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('▲▼ 樓梯',sx,botY-8);ctx.textAlign='left';
+  }
   // 觸發點
   (r.triggers||[]).forEach(drawWorldTrigger);
   // 敵人、玩家、子彈、粒子
   enemies.filter(e=>e.floorOffset!==player.floorOffset).forEach(e=>e.draw());
   enemies.filter(e=>e.floorOffset===player.floorOffset).forEach(e=>e.draw());
   player.draw();
+  // 蓄力條（頭頂）
+  if(player.charging&&player.charge>0){
+    const px=player.x-camera.x, py=(FLOOR_BOT-player.floorOffset)-player.z-camera.y-CHAR_H-14;
+    const bw=54,bh=8;
+    ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillRect(px-bw/2-2,py-2,bw+4,bh+4);
+    ctx.fillStyle='#22304a'; ctx.fillRect(px-bw/2,py,bw,bh);
+    const cg=ctx.createLinearGradient(px-bw/2,0,px+bw/2,0);
+    cg.addColorStop(0,'#7fdcff'); cg.addColorStop(1, player.charge>=100?'#ffe066':'#a5f3fc');
+    ctx.fillStyle=cg; ctx.fillRect(px-bw/2,py,bw*(player.charge/100),bh);
+    if(player.charge>=100){ ctx.strokeStyle='#ffe066'; ctx.lineWidth=1.5; ctx.strokeRect(px-bw/2,py,bw,bh);
+      ctx.fillStyle='#ffe066'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('MAX',px,py-4); ctx.textAlign='left'; }
+  }
   projectiles.forEach(p=>{const sx=p.x-camera.x,sy=(FLOOR_BOT-p.floorOffset)-p.z-camera.y;
     ctx.fillStyle=p.big?'#7fdcff':'#ffe066';ctx.beginPath();ctx.arc(sx,sy,p.big?9:5,0,Math.PI*2);ctx.fill();
     ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;});
@@ -2143,9 +2330,11 @@ function drawFloorBand(off){
 }
 function drawWorldObject(o){
   const off=o.floor?UPPER_RISE:0;
-  const sx=o.x-camera.x, sy=(o.y? (FLOOR_BOT) : FLOOR_BOT) - off - camera.y;
-  const baseY=FLOOR_BOT-off-camera.y;
-  const rc=objRect(o); 
+  const sx=o.x-camera.x;
+  // 以物件的 y（減去樓層偏移）作為底線，與編輯器所見一致
+  const baseWorldY = (o.y||FLOOR_BOT) - off;
+  const baseY = baseWorldY - camera.y;
+  const rc=objRect(o);
   const dx=sx-rc.w/2, dy=baseY-rc.h;
   if(o.src==='builtin'&&propsLoaded&&PROPS[o.prop]){
     const p=PROPS[o.prop];ctx.imageSmoothingEnabled=false;
@@ -2157,15 +2346,52 @@ function drawWorldObject(o){
 function drawWorldTrigger(t){
   if(!checkPrereq(t.requires))return;
   const off=t.floor?UPPER_RISE:0;
-  const sx=t.x-camera.x, sy=FLOOR_BOT-off-camera.y-90;
-  const col={portal:'#4dabf7',info:'#69db7c',embed:'#ffd43b',check:'#ff922b',interact:'#da77f2',machine:'#9775fa'}[t.type];
-  const ic={portal:'⬆️',info:'ℹ️',embed:'🔗',check:'❓',interact:'💬',machine:'⚗️'}[t.type];
-  // 盲搜模式不畫指引光柱
-  if(!P.blindSearch){ctx.fillStyle=col+'33';ctx.fillRect(sx-3,FLOOR_TOP-off-camera.y,6,FLOOR_BOT-FLOOR_TOP);}
-  ctx.beginPath();ctx.arc(sx,sy,15,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
-  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-  ctx.font='15px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(ic,sx,sy+1);ctx.textBaseline='alphabetic';ctx.textAlign='left';
+  const baseY=FLOOR_BOT-off-camera.y;
+  const sx=t.x-camera.x, sy=baseY-CHAR_H*0.65;
+  const ic={portal:'⬆',info:'ℹ',embed:'🔗',check:'?',interact:'💬',machine:'⚗'}[t.type];
+  // 閃動節奏（0~1）
+  const blink=0.55+0.45*Math.sin(blinkPhase*0.12);
+
+  if(t.type==='portal'){
+    // 穿越點：發光方色塊 + 箭頭（指向進入方向）
+    const w=44,h=Math.min(CHAR_H*1.4, FLOOR_BOT-FLOOR_TOP-8);
+    const bx=sx-w/2, by=baseY-h;
+    const dirLeft = t.x>ROOM_W/2;   // 靠右的門 → 往左進入（箭頭向左）；反之向右
+    ctx.save();
+    ctx.globalAlpha=0.35+0.35*blink;
+    ctx.shadowColor='#7fdcff'; ctx.shadowBlur=22*blink;
+    const grd=ctx.createLinearGradient(bx,by,bx,by+h);
+    grd.addColorStop(0,'#bfefff'); grd.addColorStop(1,'#4dabf7');
+    ctx.fillStyle=grd; ctx.fillRect(bx,by,w,h);
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    ctx.strokeStyle='#e6fbff'; ctx.lineWidth=2; ctx.strokeRect(bx,by,w,h);
+    // 箭頭
+    ctx.fillStyle='#ffffff';
+    const ay=by+h/2, aw=13;
+    ctx.beginPath();
+    if(dirLeft){ ctx.moveTo(sx-aw,ay); ctx.lineTo(sx+aw*0.5,ay-14); ctx.lineTo(sx+aw*0.5,ay+14); }
+    else       { ctx.moveTo(sx+aw,ay); ctx.lineTo(sx-aw*0.5,ay-14); ctx.lineTo(sx-aw*0.5,ay+14); }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // 標題
+    ctx.fillStyle='rgba(255,255,255,'+(0.6+0.4*blink)+')'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(t.title, sx, by-6); ctx.textAlign='left';
+    return;
+  }
+
+  // 其他觸發點：黑白、遊戲中閃動
+  const g=Math.round(180+70*blink);          // 灰階閃爍
+  const shade=`rgb(${g},${g},${g})`;
+  if(!P.blindSearch){ ctx.globalAlpha=0.10+0.10*blink;
+    ctx.fillStyle=shade; ctx.fillRect(sx-2,FLOOR_TOP-off-camera.y,4,FLOOR_BOT-FLOOR_TOP); ctx.globalAlpha=1; }
+  ctx.beginPath(); ctx.arc(sx,sy,14,0,Math.PI*2);
+  ctx.fillStyle=`rgb(${255-g+180},${255-g+180},${255-g+180})`; // 深淺對比的黑白
+  ctx.fillStyle = blink>0.75 ? '#f5f5f5' : '#111';
+  ctx.fill();
+  ctx.strokeStyle = blink>0.75 ? '#111' : '#f5f5f5'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle = blink>0.75 ? '#111' : '#f5f5f5';
+  ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(ic,sx,sy+1); ctx.textBaseline='alphabetic'; ctx.textAlign='left';
 }
 
 /* ---- 輸入 ---- */

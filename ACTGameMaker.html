@@ -642,7 +642,7 @@ function loadPreviewSprites(){
 }
 // 士兵 idle 首幀框架、機器人 idle 首幀框架（供預覽）
 const PREVIEW_FRAME={
-  player:{sx:106-106,sy:9,sw:213,sh:213},    // NEWC row0 col0 (新高解析度)
+  player:{sx:40,sy:12,sw:157,sh:207},        // NEWC row0 col0 精確去背邊界
   enemy:{sx:96-86,sy:56,sw:172,sh:160}      // ROBOT row0 col0
 };
 
@@ -2129,11 +2129,17 @@ const CHAR_SCALE=0.8;   // 角色/敵人再縮小為 80%
 
 /* ---- 精靈圖框架（與原遊戲一致） ---- */
 function Sheet(src,cfg){this.c=cfg.centers;this.t=cfg.rowTops;this.rh=cfg.rowH;this.rhs=cfg.rowHeights||null;
-  this.cw=cfg.cellW;this.loaded=false;this.img=new Image();this.img.onload=()=>this.loaded=true;this.img.src=src;}
-Sheet.prototype.rect=function(row,col){const cx=this.c[col];const sh=(this.rhs&&this.rhs[row])||this.rh;
+  this.cw=cfg.cellW;this.frames=cfg.frames||null;this.refH=cfg.refH||null;
+  this.loaded=false;this.img=new Image();this.img.onload=()=>this.loaded=true;this.img.src=src;}
+Sheet.prototype.rect=function(row,col){
+  if(this.frames&&this.frames[row]&&this.frames[row][col]){
+    const f=this.frames[row][col];return{sx:f[0],sy:f[1],sw:f[2],sh:f[3]};}
+  const cx=this.c[col];const sh=(this.rhs&&this.rhs[row])||this.rh;
   return{sx:cx-this.cw/2,sy:this.t[row],sw:this.cw,sh};};
+const SOLDIER_FRAMES=[[[40,12,157,207],[256,13,157,206],[473,12,157,207],[690,12,157,207],[906,12,156,207],[1122,12,153,207],[1338,12,150,207],[1555,13,145,206],[1770,13,143,206],[1949,13,156,207],[2211,10,111,209],[2407,9,132,213],[2586,13,157,209],[2803,14,158,203]],[[34,259,164,205],[262,259,153,205],[475,259,159,205],[690,259,160,205],[900,259,162,203],[1125,259,150,205],[1332,259,156,203],[1554,259,146,205],[1768,259,145,204],[1994,260,131,204],[2215,259,123,205],[2423,261,127,203],[2631,259,132,204],[2855,260,118,204]],[[38,537,157,175],[257,533,157,179],[476,513,154,200],[689,497,154,212],[907,488,155,211],[1121,480,154,229],[1340,486,148,225],[1556,483,144,206],[1775,489,138,207],[1991,492,134,208],[2204,493,134,205],[2424,509,126,201],[2647,534,116,178],[2838,541,131,166]],[[23,749,170,202],[239,749,168,201],[455,749,170,201],[670,749,171,201],[887,748,175,202],[1105,748,170,201],[1320,749,168,205],[1538,750,162,204],[1757,750,156,204],[1974,749,151,205],[2125,752,213,202],[2407,750,143,203],[2623,752,140,198],[2829,751,147,198]],[[32,985,169,201],[249,984,170,203],[463,984,174,202],[681,984,169,203],[887,985,175,208],[1111,974,164,213],[1275,954,213,232],[1488,954,212,234],[1700,954,213,234],[1913,954,212,233],[2195,954,143,235],[2416,991,134,198],[2634,992,129,201],[2846,993,130,196]],[[34,1222,113,199],[253,1223,124,199],[466,1223,129,197],[678,1226,141,195],[890,1193,122,234],[1098,1244,174,178],[1299,1232,189,200],[1515,1258,185,174],[1731,1261,182,171],[1950,1271,175,153],[2125,1271,213,153],[2384,1240,166,184],[2604,1193,159,236],[2823,1356,94,49]]];
 const SOLDIER=new Sheet('NEWC.png',{centers:[106,319,531,744,957,1169,1382,1594,1807,2019,2232,2445,2657,2870],
-  rowTops:[9,259,480,748,954,1193],rowHeights:[213,206,233,206,239,239],rowH:239,cellW:213});
+  rowTops:[9,259,480,748,954,1193],rowHeights:[213,206,233,206,239,239],rowH:239,cellW:213,
+  frames:SOLDIER_FRAMES,refH:207});
 const ROBOT=new Sheet('ROBOT.png',{centers:[96,275,449,615,787,960,1140,1309,1479,1655,1820,1984],
   rowTops:[56,243,415,599,774,947],rowH:160,cellW:172});
 const SOLDIER_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},
@@ -2260,8 +2266,9 @@ class Entity{
       else if(a.loop)this.frame=0;else this.frameDone=true;}}
   draw(){const a=this.anims[this.anim];if(!a||!this.sheet.loaded)return;
     const r=this.sheet.rect(a.row,acol(a,this.frame));
-    // 角色縮放：顯示高度 = CHAR_H × CHAR_SCALE（比房間 1/3 再縮小為 80%）
-    const sc=(CHAR_H*CHAR_SCALE)/r.sh;
+    // 角色縮放：以參考高度(refH)為基準，避免各幀尺寸不同造成抖動
+    const refH=this.sheet.refH||r.sh;
+    const sc=(CHAR_H*CHAR_SCALE)/refH;
     const dw=r.sw*sc, dh=r.sh*sc;
     const gy=groundYFor(this)-this.z;
     const sx=this.x-camera.x, sy=gy-camera.y;
@@ -2711,7 +2718,7 @@ function checkPickups(){
     if(o.src!=='pickup'||o._taken)return;
     const pk=PICKUPS[o.pickupType]; if(pk&&pk.turret)return;   // 砲台類不是一次性拾取
     if((o.floor?UPPER_RISE:0)!==pf)return;
-    const rad=20*(o.scale||1);
+    const rad=16*(o.scale||1);   // 與縮小後視覺一致
     const cy=(o.y||FLOOR_BOT)-(o.floor?UPPER_RISE:0)-rad-6;
     const px=player.x, py=(FLOOR_BOT-pf)-player.z-CHAR_H*0.5;
     if(Math.abs(px-o.x)<rad+22 && Math.abs(py-cy)<CHAR_H*0.6+rad){
@@ -2761,7 +2768,9 @@ function updateTurrets(){
         const dir=(o.x>ROOM_W/2)?-1:1;      // 靠右→往左射，靠左→往右射
         const startX=dir>0?-20:ROOM_W+20;
         const fo=o.floor?UPPER_RISE:0;
-        hazardProj.push({x:startX,y:FLOOR_BOT-fo-40-Math.random()*40,vx:dir*6,dmg,floorOffset:fo,life:300});
+        // 依設計者擺放高度平行射擊：dispY 為已解析樓層的顯示座標，砲口在擺放點上方約 60px
+        const dispY=((o.y!=null?o.y:FLOOR_BOT)-fo)-60;
+        hazardProj.push({x:startX,y:dispY,vx:dir*6,dmg,floorOffset:fo,life:400});
         SFX.shoot();
       }
     }
@@ -2817,14 +2826,20 @@ function drawTurretEffects(){
         ctx.strokeStyle='#ff4d6d'; ctx.lineWidth=6; ctx.stroke(); ctx.shadowBlur=0;
       }
     } else if(o.pickupType==='cannon'){
-      // 砲台底座
-      const cy=floorY-20;
-      ctx.fillStyle='#3a1a4a'; ctx.beginPath(); ctx.arc(gx,floorY,16,Math.PI,0); ctx.fill();
-      ctx.fillStyle='#e879f9'; ctx.fillRect(gx-5,cy-6,10,18);
+      // 砲台底座畫在設計者擺放的高度（與射擊平行）
+      const mountY=((o.y!=null?o.y:FLOOR_BOT)-off)-camera.y-40;
       const dir=(o.x>ROOM_W/2)?-1:1;
-      ctx.fillStyle='#c026d3'; ctx.fillRect(gx+(dir>0?4:-14),cy-3,10,6);
-      ctx.fillStyle='rgba(232,121,249,'+(0.4+0.3*Math.sin(blinkPhase*0.2))+')';
-      ctx.beginPath(); ctx.arc(gx,cy,4,0,Math.PI*2); ctx.fill();
+      // 支架連到地面
+      ctx.strokeStyle='rgba(120,60,150,.5)'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(gx,mountY+18); ctx.lineTo(gx,floorY); ctx.stroke();
+      // 底座
+      ctx.fillStyle='#3a1a4a'; ctx.beginPath(); ctx.arc(gx,mountY+16,15,Math.PI,0); ctx.fill();
+      ctx.fillStyle='#e879f9'; ctx.fillRect(gx-7,mountY-4,14,20);
+      // 砲管（朝射擊方向）
+      ctx.fillStyle='#c026d3'; ctx.fillRect(gx+(dir>0?6:-20),mountY-2,14,7);
+      // 蓄能光點
+      ctx.fillStyle='rgba(232,121,249,'+(0.4+0.4*Math.sin(blinkPhase*0.2))+')';
+      ctx.beginPath(); ctx.arc(gx,mountY+4,4,0,Math.PI*2); ctx.fill();
     }
   });
   // 橫向砲彈
@@ -3118,7 +3133,7 @@ function drawWorldObject(o){
     if(o._taken) return;
     const pk=PICKUPS[o.pickupType]; if(!pk) return;
     const baseY=(o.y||FLOOR_BOT)-off-camera.y;
-    const rad=20*(o.scale||1);
+    const rad=16*(o.scale||1);   // 遊戲中縮小 20%（20→16）
     const bob=Math.sin(blinkPhase*0.08 + o.x)*5;   // 浮動
     const cy=baseY-rad-6+bob;
     ctx.save();

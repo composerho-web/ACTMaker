@@ -154,6 +154,7 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
         <canvas id="stage"></canvas>
         <div id="stage-hint">請在畫面上點擊以放置</div>
         <div id="stage-info"></div>
+        <div id="stage-tip" style="position:absolute;display:none;background:rgba(20,30,45,.95);color:#cde;padding:6px 11px;border-radius:8px;font-size:.72em;z-index:25;pointer-events:none;border:1px solid #3a6a8a;white-space:nowrap"></div>
       </div>
       <div id="tools">
         <div class="tool-sec">
@@ -813,12 +814,16 @@ let stageScale=1, stageOffX=0, stageOffY=0;
 
 function resizeStage(){
   const w=document.getElementById('stage-wrap');
-  stage.width=w.clientWidth; stage.height=w.clientHeight;
+  const dpr=Math.min(3, window.devicePixelRatio||1);
+  const cssW=w.clientWidth, cssH=w.clientHeight;
+  stage.style.width=cssW+'px'; stage.style.height=cssH+'px';
+  stage.width=Math.round(cssW*dpr); stage.height=Math.round(cssH*dpr);
+  sctx.setTransform(dpr,0,0,dpr,0,0);   // 邏輯座標仍用 CSS 尺寸
   // 以能完整顯示 ROOM_W × (VIEW_H+UPPER_RISE) 為原則
-  const needH = VIEW_H + UPPER_RISE;
-  stageScale=Math.min(stage.width/ROOM_W, stage.height/needH)*0.94;
-  stageOffX=(stage.width-ROOM_W*stageScale)/2;
-  stageOffY=(stage.height-needH*stageScale)/2;
+  const needH = FLOOR_BOT + UPPER_RISE + 20;
+  stageScale=Math.min(cssW/ROOM_W, cssH/needH)*0.94;
+  stageOffX=(cssW-ROOM_W*stageScale)/2;
+  stageOffY=(cssH-needH*stageScale)/2 + UPPER_RISE*stageScale;
   redrawStage();
 }
 window.addEventListener('resize',resizeStage);
@@ -827,15 +832,17 @@ function s2w(sx,sy){ return {x:(sx-stageOffX)/stageScale, y:(sy-stageOffY)/stage
 function editingUpper(){ return document.getElementById('chk-upper').checked; }
 
 function redrawStage(){
-  sctx.setTransform(1,0,0,1,0,0);
-  sctx.fillStyle='#1b2430'; sctx.fillRect(0,0,stage.width,stage.height);
+  const dpr=Math.min(3, window.devicePixelRatio||1);
+  const cssW=stage.width/dpr, cssH=stage.height/dpr;
+  sctx.setTransform(dpr,0,0,dpr,0,0);
+  sctx.fillStyle='#1b2430'; sctx.fillRect(0,0,cssW,cssH);
   if(!currentRoomId||!gameData.rooms[currentRoomId]){
     sctx.fillStyle='#5b6b7d'; sctx.font='15px sans-serif'; sctx.textAlign='center';
-    sctx.fillText('請先於左側「＋ 新增房間」建立房間', stage.width/2, stage.height/2);
+    sctx.fillText('請先於左側「＋ 新增房間」建立房間', cssW/2, cssH/2);
     sctx.textAlign='left'; return;
   }
   const r=gameData.rooms[currentRoomId];
-  sctx.save(); sctx.imageSmoothingEnabled=false;
+  sctx.save(); sctx.imageSmoothingEnabled=true;
 
   // 房間背景（整個牆面）
   const topAll = r.tall ? w2s(0,FLOOR_TOP-UPPER_RISE).y : w2s(0,FLOOR_TOP).y;
@@ -878,8 +885,8 @@ function trgMarkerPos(t){
   const baseY=w2s(0,FLOOR_BOT-off).y;
   const p=w2s(t.x,0);
   if(t.type==='portal'){
-    const h=Math.min(CHAR_H*1.4,FLOOR_BOT-FLOOR_TOP-8)*stageScale;
-    return {x:p.x, y:baseY-h/2, r:Math.max(22,h/2)};
+    const h=CHAR_H*stageScale;
+    return {x:p.x, y:baseY-h/2, r:Math.max(24,h/2)};
   }
   return {x:p.x, y:baseY-CHAR_H*0.65*stageScale, r:15};
 }
@@ -904,7 +911,7 @@ function drawSampleActor(kind,x,floor){
   const fr=PREVIEW_FRAME[kind], im=previewSprites[kind];
   const dh=CHAR_H*stageScale, dw=(fr.sw/fr.sh)*dh;
   sctx.globalAlpha=0.5;
-  if(im){ sctx.imageSmoothingEnabled=false;
+  if(im){ sctx.imageSmoothingEnabled=true;
     sctx.drawImage(im,fr.sx,fr.sy,fr.sw,fr.sh,p.x-dw/2,p.y-dh,dw,dh); }
   else { sctx.fillStyle=kind==='player'?'rgba(80,160,220,.5)':'rgba(220,80,80,.5)';
     sctx.fillRect(p.x-dw/2,p.y-dh,dw,dh); }
@@ -970,25 +977,24 @@ function drawTrigger(t){
   const p=w2s(t.x, t.y-off);
 
   if(t.type==='portal'){
-    // 穿越點：發光方色塊 + 箭頭（與遊戲一致）
-    const w=44*stageScale, h=Math.min(CHAR_H*1.4,FLOOR_BOT-FLOOR_TOP-8)*stageScale;
+    // 穿越點：與角色同高的門型發光體（無箭頭），與遊戲一致
+    const w=CHAR_H*0.62*stageScale, h=CHAR_H*stageScale;
     const bx=p.x-w/2, by=baseY-h;
-    const dirLeft=t.x>ROOM_W/2;
     const grd=sctx.createLinearGradient(bx,by,bx,by+h);
-    grd.addColorStop(0,'#bfefff'); grd.addColorStop(1,'#4dabf7');
-    sctx.fillStyle=grd; sctx.globalAlpha*=0.7; sctx.fillRect(bx,by,w,h); sctx.globalAlpha=((t.floor===1)===up)?1:0.3;
-    sctx.strokeStyle='#e6fbff'; sctx.lineWidth=2; sctx.strokeRect(bx,by,w,h);
-    sctx.fillStyle='#fff';
-    const ay=by+h/2, aw=13*stageScale;
+    grd.addColorStop(0,'#dff6ff'); grd.addColorStop(0.5,'#7fc8f0'); grd.addColorStop(1,'#3a86c8');
+    sctx.fillStyle=grd; sctx.globalAlpha*=0.75;
     sctx.beginPath();
-    if(dirLeft){sctx.moveTo(p.x-aw,ay);sctx.lineTo(p.x+aw*0.5,ay-14*stageScale);sctx.lineTo(p.x+aw*0.5,ay+14*stageScale);}
-    else{sctx.moveTo(p.x+aw,ay);sctx.lineTo(p.x-aw*0.5,ay-14*stageScale);sctx.lineTo(p.x-aw*0.5,ay+14*stageScale);}
-    sctx.closePath();sctx.fill();
+    sctx.moveTo(bx,by+h); sctx.lineTo(bx,by+w*0.5);
+    sctx.arc(p.x,by+w*0.5,w/2,Math.PI,0,false);
+    sctx.lineTo(bx+w,by+h); sctx.closePath(); sctx.fill();
+    sctx.globalAlpha=((t.floor===1)===up)?1:0.3;
+    sctx.strokeStyle='#eaffff'; sctx.lineWidth=2.5;
+    sctx.beginPath();
+    sctx.moveTo(bx,by+h); sctx.lineTo(bx,by+w*0.5);
+    sctx.arc(p.x,by+w*0.5,w/2,Math.PI,0,false);
+    sctx.lineTo(bx+w,by+h); sctx.stroke();
     sctx.fillStyle='#fff';sctx.font='10px sans-serif';sctx.textAlign='center';
     sctx.fillText(t.title,p.x,by-5);sctx.textAlign='left';
-    // 觸發半徑（編輯輔助，淡）
-    sctx.strokeStyle='rgba(127,220,255,.4)';sctx.setLineDash([5,4]);sctx.lineWidth=1;
-    sctx.beginPath();sctx.arc(p.x,baseY-CHAR_H*0.5*stageScale,(t.radius||70)*stageScale,0,Math.PI*2);sctx.stroke();sctx.setLineDash([]);
     sctx.globalAlpha=1; return;
   }
 
@@ -1074,6 +1080,20 @@ stage.addEventListener('mousemove',e=>{
     o.scale=Math.round(ns*100)/100;
     redrawStage(); updateStageInfo();
     return;
+  }
+  // 懸停偵測：滑過觸發點 → 手形游標 + 提示
+  if(!draggingObj&&!draggingTrg&&editMode==='select'&&currentRoomId){
+    const rect=stage.getBoundingClientRect();
+    const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
+    const up=editingUpper(); const r=gameData.rooms[currentRoomId];
+    const hovT=r.triggers.find(t=>{ if((t.floor===1)!==up)return false;
+      const m=trgMarkerPos(t); return Math.hypot(sx-m.x,sy-m.y)<m.r; });
+    const tip=document.getElementById('stage-tip');
+    if(hovT){ stage.style.cursor='pointer';
+      tip.style.display='block'; tip.textContent='🖱️ 點兩下可編輯此觸發點：'+hovT.title;
+      tip.style.left=(sx+14)+'px'; tip.style.top=(sy-10)+'px'; }
+    else { stage.style.cursor=editMode==='select'?'default':'crosshair';
+      tip.style.display='none'; }
   }
   if(!draggingObj&&!draggingTrg) return;
   const rect=stage.getBoundingClientRect();
@@ -1828,7 +1848,7 @@ class Entity{
     const sx=this.x-camera.x, sy=gy-camera.y;
     ctx.save();ctx.translate(sx,sy);if(this.dir<0)ctx.scale(-1,1);
     if(this.isHurt&&Math.floor(this.hurtTimer/3)%2)ctx.globalAlpha=0.5;
-    ctx.imageSmoothingEnabled=false;
+    ctx.imageSmoothingEnabled=true;
     ctx.drawImage(this.sheet.img,r.sx,r.sy,r.sw,r.sh,-dw/2,-dh,dw,dh);
     ctx.restore();}
 }
@@ -2157,7 +2177,40 @@ function giveReward(itemId){
   }
 }
 
-/* ---- 說明/媒體/嵌入 ---- */
+/* ---- 使用道具（背包點擊） ---- */
+function useItem(itemId){
+  const it=P.items.find(i=>i.id===itemId); if(!it)return;
+  // 若限定使用房間，檢查是否在該房間
+  if(it.targetScene && window.__curRoomId!==it.targetScene){
+    const rm=P.rooms[it.targetScene];
+    return sysAlert('這個道具需要在「'+(rm?rm.name:'特定房間')+'」才能使用。');
+  }
+  let consumed=false;
+  switch(it.actionType){
+    case 'url': if(it.actionValue)window.open(it.actionValue,'_blank'); break;
+    case 'text': showStory(it.name, it.actionValue||it.desc, it.img?[it.img]:[]); break;
+    case 'score': score+=parseInt(it.actionValue)||0; consumed=true; updateHUD(); sysAlert('獲得 '+it.actionValue+' 分！'); break;
+    case 'energy': { const v=parseInt(it.actionValue)||0; player.hp=Math.max(0,Math.min(player.maxHp,player.hp+v));
+      consumed=true; updateHUD(); sysAlert((v>=0?'能量 +':'能量 ')+v); break; }
+    case 'time': { const v=parseInt(it.actionValue)||0; timeLeft+=v; consumed=true;
+      sysAlert((v>=0?'時間 +':'時間 ')+v+' 秒'); break; }
+    case 'teleport': if(it.actionValue&&P.rooms[it.actionValue]){ consumed=true;
+      document.getElementById('ov-backpack').style.display='none'; loadRoom(it.actionValue,'right'); } break;
+    case 'hint': { // 兌換某檢驗點的提示
+      let found=false;
+      for(const rid in P.rooms) for(const t of P.rooms[rid].triggers){
+        if(t.id===it.actionValue && t.hints){ const ih=t.hints.find(h=>h.type==='item'&&h.reqItemId===itemId)||t.hints[0];
+          if(ih){ showStory('💡 提示',ih.text,ih.media); found=true; consumed=true; } } }
+      if(!found)sysAlert('目前沒有可兌換的提示。'); break; }
+    default: sysAlert('這個道具沒有可用的效果。'); return;
+  }
+  if(consumed){
+    inventory=inventory.filter(x=>x!==itemId); usedItems.push(itemId);
+    addLog('使用道具',it.name); updateHUD();
+    const box=document.getElementById('bp-list');
+    if(box&&document.getElementById('ov-backpack').style.display==='flex') openBackpack();
+  }
+}
 function mediaHTML(u){return /\.(mp4|webm|ogg)$/i.test(u)
   ?`<video src="${u}" controls style="max-width:100%;border-radius:8px"></video>`
   :`<img src="${u}" style="max-width:100%;border-radius:8px">`;}
@@ -2264,7 +2317,7 @@ function render(){
   ctx.setTransform(1,0,0,1,0,0);
   const r=curRoom||{bg:'#111',floor:'#222',accent:'#333'};
   ctx.fillStyle=r.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
-  const sc=canvas.width/VIEW_W; ctx.setTransform(sc,0,0,sc,0,0);
+  const sc=__renderScale; ctx.setTransform(sc,0,0,sc,0,0);
   // 地板（雙層）
   drawFloorBand(0); if(r.tall)drawFloorBand(UPPER_RISE);
   // 物件（下層先畫）
@@ -2337,7 +2390,7 @@ function drawWorldObject(o){
   const rc=objRect(o);
   const dx=sx-rc.w/2, dy=baseY-rc.h;
   if(o.src==='builtin'&&propsLoaded&&PROPS[o.prop]){
-    const p=PROPS[o.prop];ctx.imageSmoothingEnabled=false;
+    const p=PROPS[o.prop];ctx.imageSmoothingEnabled=true;
     ctx.drawImage(propsImg,p.x,p.y,p.w,p.h,dx,dy,rc.w,rc.h);
   }else if(o.src==='custom'){const im=getCustomImg(o.img);
     if(im.complete&&im.naturalWidth)ctx.drawImage(im,dx,dy,rc.w,rc.h);
@@ -2353,25 +2406,39 @@ function drawWorldTrigger(t){
   const blink=0.55+0.45*Math.sin(blinkPhase*0.12);
 
   if(t.type==='portal'){
-    // 穿越點：發光方色塊 + 箭頭（指向進入方向）
-    const w=44,h=Math.min(CHAR_H*1.4, FLOOR_BOT-FLOOR_TOP-8);
+    // 穿越點：與角色同高的門型發光體（無箭頭）
+    const w=CHAR_H*0.62, h=CHAR_H;
     const bx=sx-w/2, by=baseY-h;
-    const dirLeft = t.x>ROOM_W/2;   // 靠右的門 → 往左進入（箭頭向左）；反之向右
     ctx.save();
-    ctx.globalAlpha=0.35+0.35*blink;
-    ctx.shadowColor='#7fdcff'; ctx.shadowBlur=22*blink;
+    // 外光暈
+    ctx.globalAlpha=0.30+0.30*blink;
+    ctx.shadowColor='#7fdcff'; ctx.shadowBlur=26*blink;
+    // 門框（拱頂）
     const grd=ctx.createLinearGradient(bx,by,bx,by+h);
-    grd.addColorStop(0,'#bfefff'); grd.addColorStop(1,'#4dabf7');
-    ctx.fillStyle=grd; ctx.fillRect(bx,by,w,h);
-    ctx.shadowBlur=0; ctx.globalAlpha=1;
-    ctx.strokeStyle='#e6fbff'; ctx.lineWidth=2; ctx.strokeRect(bx,by,w,h);
-    // 箭頭
-    ctx.fillStyle='#ffffff';
-    const ay=by+h/2, aw=13;
+    grd.addColorStop(0,'#dff6ff'); grd.addColorStop(0.5,'#7fc8f0'); grd.addColorStop(1,'#3a86c8');
+    ctx.fillStyle=grd;
     ctx.beginPath();
-    if(dirLeft){ ctx.moveTo(sx-aw,ay); ctx.lineTo(sx+aw*0.5,ay-14); ctx.lineTo(sx+aw*0.5,ay+14); }
-    else       { ctx.moveTo(sx+aw,ay); ctx.lineTo(sx-aw*0.5,ay-14); ctx.lineTo(sx-aw*0.5,ay+14); }
-    ctx.closePath(); ctx.fill();
+    ctx.moveTo(bx,by+h);
+    ctx.lineTo(bx,by+w*0.5);
+    ctx.arc(sx,by+w*0.5,w/2,Math.PI,0,false);   // 拱頂
+    ctx.lineTo(bx+w,by+h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // 門框邊
+    ctx.strokeStyle='#eaffff'; ctx.lineWidth=2.5;
+    ctx.beginPath();
+    ctx.moveTo(bx,by+h);
+    ctx.lineTo(bx,by+w*0.5);
+    ctx.arc(sx,by+w*0.5,w/2,Math.PI,0,false);
+    ctx.lineTo(bx+w,by+h);
+    ctx.stroke();
+    // 內部流光直紋
+    ctx.globalAlpha=0.4+0.3*blink;
+    ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=1;
+    for(let i=1;i<=3;i++){ const lx=bx+w*i/4;
+      ctx.beginPath(); ctx.moveTo(lx,by+w*0.5); ctx.lineTo(lx,by+h-4); ctx.stroke(); }
+    ctx.globalAlpha=1;
     ctx.restore();
     // 標題
     ctx.fillStyle='rgba(255,255,255,'+(0.6+0.4*blink)+')'; ctx.font='11px sans-serif'; ctx.textAlign='center';
@@ -2420,7 +2487,14 @@ function resizeCanvas(){const w=document.getElementById('game-viewer');
   const ratio=VIEW_W/VIEW_H; let cw=w.clientWidth,ch=w.clientHeight;
   if(cw/ch>ratio)cw=ch*ratio; else ch=cw/ratio;
   canvas.style.width=cw+'px';canvas.style.height=ch+'px';
-  canvas.width=VIEW_W;canvas.height=VIEW_H;}
+  // 以顯示尺寸 × 裝置像素比 作為實際繪製解析度，避免放大模糊
+  const dpr=Math.min(3, window.devicePixelRatio||1);
+  const scale=Math.max(1, (cw/VIEW_W)*dpr);
+  canvas.width=Math.round(VIEW_W*scale);
+  canvas.height=Math.round(VIEW_H*scale);
+  __renderScale=scale;
+}
+let __renderScale=1;
 window.addEventListener('resize',resizeCanvas);
 resizeCanvas(); loop();
 </script>
@@ -2491,7 +2565,7 @@ function buildGameHTML(isPreview){
 #hud-timer{font-weight:900;font-size:1.2em;display:none}
 .hud-item{font-weight:800;font-size:1.1em;white-space:nowrap}
 #game-viewer{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
-#game-canvas{display:block;image-rendering:pixelated;background:#111}
+#game-canvas{display:block;background:#111}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:none;justify-content:center;align-items:center;padding:20px}
 .modal{background:var(--panel);color:var(--text);border-radius:12px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto;padding:20px}
 .modal h2,.modal h3{color:var(--primary);margin-top:0}
@@ -2503,6 +2577,8 @@ function buildGameHTML(isPreview){
 #machine-bar{background:var(--primary);color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:10px 10px 0 0}
 #machine-frame{flex:1;width:100%;border:none;background:#0b1120;border-radius:0 0 10px 10px}
 #bp-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--primary);color:#fff;font-size:28px;display:none;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4);border:3px solid #fff;cursor:pointer;z-index:900}
+#ctab-btn{position:fixed;bottom:20px;right:90px;width:60px;height:60px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4);border:3px solid #fff;cursor:pointer;z-index:900}
+#ctab-frame{width:100%;height:66vh;border:none;border-radius:8px;background:#fff}
 #check-ans{width:100%;padding:11px;border:2px solid var(--border);border-radius:8px;font-size:1em;margin:8px 0}
 #trans{position:fixed;inset:0;pointer-events:none;z-index:1500;opacity:0;background:#000}
 #embed-frame{width:100%;height:70vh;border:none;border-radius:8px;background:#fff}
@@ -2544,6 +2620,7 @@ function buildGameHTML(isPreview){
   <div class="ctrl-hint">← → / A D 移動 · 空白鍵跳 · Z 射擊${gameData.weapon==='blaster'?' · C 蓄力':''} · X 互動/出入口</div>
 </div>
 <div id="bp-btn" onclick="openBackpack()">🎒</div>
+${gameData.customTabEnabled&&gameData.customTabUrl?`<div id="ctab-btn" onclick="openCustomTab()" title="${gameData.customTabName||'資訊'}">📑</div>`:''}
 
 <div id="trans"></div>
 
@@ -2590,6 +2667,17 @@ function buildGameHTML(isPreview){
   <h3 id="acq-name"></h3>
   <button class="btn-act" onclick="document.getElementById('ov-acq').style.display='none'">放入背包</button></div></div>
 
+<!-- 自訂 iframe 頁籤 -->
+<div class="ov" id="ov-ctab"><div class="modal" style="max-width:960px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div><h2 id="ctab-title" style="margin:0"></h2><small id="ctab-desc" style="color:#888"></small></div>
+    <div style="display:flex;gap:8px">
+      <a id="ctab-newtab" href="#" target="_blank" style="color:var(--accent);align-self:center">🔗 新分頁</a>
+      <button class="btn-act" style="width:auto;margin:0;padding:6px 14px;background:#6c757d" onclick="document.getElementById('ov-ctab').style.display='none';document.getElementById('ctab-frame').src=''">關閉</button>
+    </div>
+  </div>
+  <iframe id="ctab-frame"></iframe></div></div>
+
 <!-- 背包 -->
 <div class="ov" id="ov-backpack"><div class="modal" style="text-align:center">
   <h2>🎒 道具背包</h2><div id="bp-list"></div>
@@ -2612,8 +2700,24 @@ window.__PROP_SCALES__=${JSON.stringify(PROP_SCALES_RUNTIME)};
 function openBackpack(){var box=document.getElementById('bp-list');box.innerHTML='';
   if(!inventory.length){box.innerHTML='<p style="color:#888">背包是空的</p>';}
   else inventory.forEach(function(id){var it=window.__PAYLOAD__.items.find(function(i){return i.id===id;});if(!it)return;
-    box.innerHTML+='<div style="display:flex;gap:12px;align-items:center;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px"><img src="'+(it.img||'https://placehold.co/50')+'" style="width:50px;height:50px;border-radius:6px;object-fit:cover"><div style="text-align:left"><b>'+it.name+'</b><br><small>'+(it.desc||'')+'</small></div></div>';});
+    var d=document.createElement('div');
+    d.style.cssText='display:flex;gap:12px;align-items:center;border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;transition:background .15s';
+    d.onmouseover=function(){d.style.background='#eef6ff';};
+    d.onmouseout=function(){d.style.background='';};
+    var act=(it.actionType&&it.actionType!=='none')?'<br><span style="color:#0f4c81;font-size:.8em">👉 點擊使用</span>':'';
+    d.innerHTML='<img src="'+(it.img||'https://placehold.co/50')+'" style="width:50px;height:50px;border-radius:6px;object-fit:cover"><div style="text-align:left"><b>'+it.name+'</b><br><small>'+(it.desc||'')+'</small>'+act+'</div>';
+    d.onclick=function(){ useItem(id); };
+    box.appendChild(d);
+  });
   document.getElementById('ov-backpack').style.display='flex';}
+function openCustomTab(){
+  var P=window.__PAYLOAD__;
+  document.getElementById('ctab-frame').src=P.customTabUrl;
+  document.getElementById('ctab-newtab').href=P.customTabUrl;
+  document.getElementById('ctab-title').textContent=P.customTabName||'資訊頁籤';
+  document.getElementById('ctab-desc').textContent=P.customTabDesc||'';
+  document.getElementById('ov-ctab').style.display='flex';
+}
 <\/script>
 <script>eval(decodeURIComponent(escape(atob('${obf}'))));<\/script>
 </body></html>`;

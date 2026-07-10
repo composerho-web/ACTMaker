@@ -660,15 +660,22 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       <code style="background:#dceaf7;padding:2px 5px;border-radius:4px">window.parent.postMessage({ type:'attackUpgrade', kind:'（效果由此處設定，可省略）', amount:1 }, '*')</code><br>
       系統會忽略 HTML 內自訂的 kind/amount，改用你在上方設定的效果與數值（更安全）。你只需在「通關」時送出這個訊息即可。
     </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button style="padding:7px 14px;background:#e9f2ff;color:#1e5aa8;border:1px solid #b6d4ea;border-radius:7px;cursor:pointer;font-weight:600" onclick="downloadMachineExample()">📄 下載範例機台 HTML</button>
+      <button style="padding:7px 14px;background:#e9f2ff;color:#1e5aa8;border:1px solid #b6d4ea;border-radius:7px;cursor:pointer;font-weight:600" onclick="copyMachinePrompt()">📋 複製 AI 生成提示詞</button>
+    </div>
+    <div style="font-size:.76em;color:#888;margin-bottom:8px">💡 沒有現成機台？先「下載範例」照著改，或「複製提示詞」交給 AI 生成後再上傳。</div>
     <div class="form-group">
+      <label>選擇機台 HTML 檔</label>
       <input type="file" id="mc-file" accept=".html,.htm" class="form-control" onchange="handleMachineUpload(event)">
     </div>
     <div id="mc-diagnosis" style="display:none;border-radius:8px;padding:12px;margin-top:8px;font-size:.82em"></div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="tbtn" id="mc-test-btn" style="display:none" onclick="testMachinePreview()">🧪 預覽測試（試觸發獎勵）</button>
-      <span id="mc-test-result" style="font-size:.8em;align-self:center;color:#666"></span>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+      <button id="mc-test-btn" style="display:none;padding:8px 16px;background:#7c3aed;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600" onclick="testMachinePreview()">🧪 預覽測試機台（在下方試玩並測試獎勵傳值）</button>
+      <span id="mc-test-result" style="font-size:.8em;color:#666"></span>
     </div>
     <div id="mc-preview-wrap" style="display:none;margin-top:10px">
+      <div style="font-size:.78em;color:#666;margin-bottom:4px">↓ 這是機台的實際畫面，請在其中完成挑戰以測試是否能正確發放獎勵：</div>
       <iframe id="mc-preview-frame" style="width:100%;height:360px;background:#fff;border:1px solid #ccd;border-radius:8px"></iframe>
     </div>
 
@@ -781,10 +788,11 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
     </div>
     <div id="g-machine-list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <button class="btn-act" style="width:auto;margin:0;padding:8px 16px;background:#217a3e" onclick="openMachineModal(null)">➕ 新增自訂機台</button>
-      <button class="tbtn" onclick="downloadMachineExample()">📄 下載範例機台 HTML</button>
-      <button class="tbtn" onclick="copyMachinePrompt()">📋 複製 AI 生成提示詞</button>
+      <button style="padding:8px 16px;background:#217a3e;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600" onclick="openMachineModal(null)">➕ 新增自訂機台</button>
+      <button style="padding:8px 16px;background:#e9f2ff;color:#1e5aa8;border:1px solid #b6d4ea;border-radius:7px;cursor:pointer;font-weight:600" onclick="downloadMachineExample()">📄 下載範例機台 HTML</button>
+      <button style="padding:8px 16px;background:#e9f2ff;color:#1e5aa8;border:1px solid #b6d4ea;border-radius:7px;cursor:pointer;font-weight:600" onclick="copyMachinePrompt()">📋 複製 AI 生成提示詞</button>
     </div>
+    <div style="font-size:.76em;color:#888;margin-top:5px">沒有現成機台？可先「下載範例」照著改，或「複製提示詞」給 AI 生成後上傳。</div>
 
     <h3 class="section-title">⏱️ 限制設定</h3>
     <div class="form-row">

@@ -496,6 +496,51 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
   </div>
 </div></div>
 
+<!-- ============ 自訂主角上傳 ============ -->
+<div class="modal-backdrop" id="char-modal"><div class="panel" style="width:820px;max-width:96vw">
+  <div class="panel-header"><h2>🦸 自訂主角外觀</h2><button class="btn-close" onclick="closeModal('char-modal')">×</button></div>
+  <div class="panel-body">
+    <div class="hint-note" style="background:#fff8e6;border-color:#f0d890;color:#7a5a00;line-height:1.7">
+      <b>精靈圖版面規格（必讀）：</b><br>
+      • 一張圖包含 <b>6 列（由上到下）× 14 欄（由左到右）</b>，共 84 格，每格一個動作影格。<br>
+      • 每一列代表一種動作，順序固定：<br>
+      &nbsp;&nbsp;第 1 列 = 待機/瞄準　第 2 列 = 行走　第 3 列 = 奔跑(前 6 格)+跳躍(後 4 格)<br>
+      &nbsp;&nbsp;第 4 列 = 射擊　第 5 列 = 光束/特殊攻擊　第 6 列 = 受傷(前 5 格)+倒下(後 9 格)<br>
+      • 角色一律<b>面向右方</b>、站在格子底部中央；背景建議<b>純黑或透明</b>（系統會自動去背）。<br>
+      • 各格大小可不同，系統會自動偵測每格的精確邊界。建議整張圖寬 2000～3000px。
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+      <button class="tbtn" onclick="downloadCharTemplate()">📐 下載版面規格圖</button>
+      <button class="tbtn" onclick="copyCharPrompt()">📋 複製 AI 生圖提示詞</button>
+    </div>
+
+    <div class="form-group">
+      <label>上傳角色精靈圖（PNG，黑底或透明）</label>
+      <input type="file" id="char-file" accept="image/png,image/jpeg" class="form-control" onchange="handleCharUpload(event)">
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="char-removebg" checked style="width:18px;height:18px">
+        <label style="margin:0">自動去背（黑底轉透明）</label>
+      </div>
+      <div class="form-group"><label>去背容許度：<span id="char-tol-val">40</span></label>
+        <input type="range" id="char-tol" min="10" max="120" value="40" style="width:100%" oninput="document.getElementById('char-tol-val').textContent=this.value">
+      </div>
+    </div>
+
+    <div id="char-diagnosis" style="display:none;background:#f7f9fc;border:1px solid #dde5ee;border-radius:8px;padding:12px;margin-top:8px;font-size:.82em"></div>
+    <div id="char-preview-wrap" style="display:none;margin-top:10px">
+      <div style="font-weight:bold;margin-bottom:6px">偵測結果預覽（每列取前幾格）</div>
+      <canvas id="char-preview" style="width:100%;background:#1b2430;border-radius:8px"></canvas>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn-act btn-cancel" style="width:auto;margin:0;padding:8px 16px" onclick="removeCustomChar()">↩️ 恢復預設主角</button>
+      <button class="btn-act" id="char-apply-btn" style="width:auto;margin:0;padding:8px 16px;display:none" onclick="applyCustomChar()">✅ 套用此角色</button>
+    </div>
+  </div>
+</div></div>
+
 <!-- ============ 全域設定 ============ -->
 <div class="modal-backdrop" id="global-modal"><div class="panel">
   <div class="panel-header"><h2>⚙️ 全域設定</h2><button class="btn-close" onclick="closeModal('global-modal')">×</button></div>
@@ -562,6 +607,15 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       <div class="form-group"><label>移動速度</label><input type="number" id="g-speed" class="form-control" value="4" min="1" step="0.5"></div>
     </div>
     <div class="hint-note">玩家能量歸零時扣一條生命並原地復活；生命用盡才 Game Over。機台強化會在此基礎上疊加。</div>
+
+    <h3 class="section-title">🦸 自訂主角外觀</h3>
+    <div class="hint-note" style="background:#f0f7ff;border-color:#b6d4ea;color:#0369a1">
+      可上傳自己的角色精靈圖取代預設主角。系統會自動去背、偵測每個動作的畫格。<b>務必依照規定的版面</b>（6 列 × 14 欄，每列一種動作）。
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+      <button class="btn-act" style="width:auto;margin:0;padding:8px 16px" onclick="openCharacterModal()">🖼️ 上傳／設定自訂主角</button>
+      <span id="g-customPlayer-status" style="font-size:.8em;color:#666"></span>
+    </div>
 
     <h3 class="section-title">⏱️ 限制設定</h3>
     <div class="form-row">
@@ -1330,8 +1384,10 @@ stage.addEventListener('mousemove',e=>{
   const up=editingUpper(); const wy=up?w.y+UPPER_RISE:w.y;
   const tgt=draggingObj?draggingObj.o:draggingTrg.t;
   tgt.x=Math.max(20,Math.min(ROOM_W-20,Math.round(w.x)));
-  tgt.y=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,Math.round(up?wy-UPPER_RISE+UPPER_RISE:wy)));
-  if(up) tgt.y=Math.max(FLOOR_TOP+UPPER_RISE,Math.min(FLOOR_BOT+UPPER_RISE,Math.round(wy)));
+  // 垂直範圍放寬：允許貼到牆面更高處（可懸空/壁掛），上限拉高到牆頂上方一點
+  const CEIL = FLOOR_TOP - 300;   // 允許遠高於地板（牆面上方，甚至可懸空）
+  if(up) tgt.y=Math.max(CEIL+UPPER_RISE,Math.min(FLOOR_BOT+UPPER_RISE,Math.round(wy)));
+  else   tgt.y=Math.max(CEIL,Math.min(FLOOR_BOT,Math.round(wy)));
   redrawStage();
 });
 window.addEventListener('mouseup',()=>{
@@ -1466,7 +1522,7 @@ function loadCustomObjImage(o){
 function placeObject(x,y,floor){
   const r=gameData.rooms[currentRoomId];
   if(floor===1&&!r.tall) return sysAlert('此房間不是樓中樓，請先在房間設定改為樓中樓。');
-  const yy=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,y-(floor?UPPER_RISE:0)))+(floor?UPPER_RISE:0);
+  const yy=Math.max(FLOOR_TOP-300,Math.min(FLOOR_BOT,y-(floor?UPPER_RISE:0)))+(floor?UPPER_RISE:0);
   let o;
   if(objSource==='pickup'){
     if(!selectedPickup) return sysAlert('請先在小物件庫點選一個道具。');
@@ -1561,7 +1617,7 @@ function placeTrigger(x,y,floor){
   const r=gameData.rooms[currentRoomId];
   if(floor===1&&!r.tall) return sysAlert('此房間不是樓中樓。');
   const type=document.getElementById('trg-type').value;
-  const yy=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,y-(floor?UPPER_RISE:0)))+(floor?UPPER_RISE:0);
+  const yy=Math.max(FLOOR_TOP-300,Math.min(FLOOR_BOT,y-(floor?UPPER_RISE:0)))+(floor?UPPER_RISE:0);
   const pref={portal:'穿越',info:'資訊',embed:'嵌入',check:'檢驗',interact:'互動',machine:'機台'}[type];
   const t={
     id:'trg_'+Date.now(), type, title:'新'+pref+'點',
@@ -1908,10 +1964,183 @@ function renderEditorItems(){
 }
 
 /* ================= 全域設定（移植 + 武器/能量） ================= */
+/* ================= 自訂主角 ================= */
+let _charPending=null;   // {img(dataURL), frames, refH, sheetW, sheetH}
+const CHAR_ROW_LABELS=['待機/瞄準','行走','奔跑+跳躍','射擊','光束/特殊','受傷+倒下'];
+function openCharacterModal(){
+  document.getElementById('char-diagnosis').style.display='none';
+  document.getElementById('char-preview-wrap').style.display='none';
+  document.getElementById('char-apply-btn').style.display='none';
+  _charPending=null;
+  openModal('char-modal');
+}
+function handleCharUpload(ev){
+  const f=ev.target.files&&ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{ const im=new Image(); im.onload=()=>detectCharSheet(im); im.onerror=()=>sysAlert('圖片載入失敗。'); im.src=rd.result; };
+  rd.readAsDataURL(f);
+}
+// 6 列 × 14 欄，逐格偵測精確邊界（含去背）
+function detectCharSheet(img){
+  const NROWS=6, NCOLS=14;
+  const W=img.naturalWidth, H=img.naturalHeight;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const cx=cv.getContext('2d'); cx.drawImage(img,0,0);
+  let data;
+  try{ data=cx.getImageData(0,0,W,H); }catch(e){ sysAlert('無法讀取圖片像素（可能是跨網域限制）。請下載到本機後再上傳。'); return; }
+  const d=data.data;
+  const removeBg=document.getElementById('char-removebg').checked;
+  const tol=parseInt(document.getElementById('char-tol').value)||40;
+  if(removeBg){
+    const corners=[[0,0],[W-1,0],[0,H-1],[W-1,H-1]];
+    let br=0,bg=0,bb=0; corners.forEach(([x,y])=>{const i=(y*W+x)*4;br+=d[i];bg+=d[i+1];bb+=d[i+2];});
+    br/=4;bg/=4;bb/=4; const t2=tol*tol;
+    for(let i=0;i<d.length;i+=4){const dr=d[i]-br,dg=d[i+1]-bg,db=d[i+2]-bb;
+      if(dr*dr+dg*dg+db*db<t2)d[i+3]=0;}
+    cx.putImageData(data,0,0);
+  }
+  const al=new Uint8Array(W*H);
+  for(let p=0,i=3;p<W*H;p++,i+=4)al[p]=d[i];
+  const rowH=H/NROWS, colW=W/NCOLS;
+  const frames=[]; let refH=0, detected=0, empty=0;
+  for(let r=0;r<NROWS;r++){
+    const y0=Math.floor(r*rowH), y1=Math.floor((r+1)*rowH);
+    const rowFrames=[];
+    for(let c=0;c<NCOLS;c++){
+      const cx0=Math.floor(c*colW), cx1=Math.floor((c+1)*colW);
+      let runs=[], ins=false, s=0;
+      for(let x=cx0;x<cx1;x++){
+        let den=0; for(let y=y0;y<y1;y++){ if(al[y*W+x]>60){den++; if(den>=3)break;} }
+        if(den>=3){ if(!ins){ins=true;s=x;} } else { if(ins){ins=false;runs.push([s,x]);} }
+      }
+      if(ins)runs.push([s,cx1]);
+      if(!runs.length){ rowFrames.push(null); empty++; continue; }
+      const cc=(cx0+cx1)/2; let best=null,bs=-1;
+      for(const rn of runs){ const sc=(rn[0]<=cc&&cc<=rn[1]?1000:0)+(rn[1]-rn[0]); if(sc>bs){bs=sc;best=rn;} }
+      const xa=best[0], xb=best[1];
+      let ya=-1,yb=-1;
+      for(let y=y0;y<y1;y++){ let den=0; for(let x=xa;x<xb;x++){ if(al[y*W+x]>60){den++; if(den>=3)break;} }
+        if(den>=3){ if(ya<0)ya=y; yb=y; } }
+      if(ya<0){ rowFrames.push(null); empty++; continue; }
+      rowFrames.push([xa,ya,xb-xa,yb-ya+1]); detected++;
+      if(r===0&&c===0) refH=yb-ya+1;
+    }
+    frames.push(rowFrames);
+  }
+  if(!refH){ for(const f of frames[0]) if(f) refH=Math.max(refH,f[3]); }
+  const processedURL=cv.toDataURL('image/png');
+  _charPending={img:processedURL, frames, refH: refH||200, sheetW:W, sheetH:H};
+  showCharDiagnosis(frames, W, H, detected, empty, removeBg);
+  drawCharPreview(cv, frames);
+  document.getElementById('char-apply-btn').style.display=(detected>=60)?'inline-block':'none';
+}
+function showCharDiagnosis(frames, W, H, detected, empty, removeBg){
+  const el=document.getElementById('char-diagnosis'); el.style.display='block';
+  const perRow=frames.map((row,i)=>{
+    const n=row.filter(Boolean).length;
+    const ok=n>=(i===0?8:5);
+    return `<div style="display:flex;justify-content:space-between;padding:2px 0">
+      <span>第 ${i+1} 列（${CHAR_ROW_LABELS[i]}）</span>
+      <span style="color:${ok?'#2b8a3e':'#c92a2a'}">${n} 格 ${ok?'✓':'⚠ 偏少'}</span></div>`;
+  }).join('');
+  const okAll=detected>=60;
+  el.innerHTML=`
+    <div style="font-weight:bold;margin-bottom:6px">🔍 診斷結果</div>
+    <div>圖片尺寸：${W} × ${H} px　｜　去背：${removeBg?'已啟用':'未啟用'}</div>
+    <div>偵測到有效影格：<b>${detected}</b> / 84　（空格 ${empty}）</div>
+    <div style="margin-top:6px;border-top:1px dashed #ccd;padding-top:6px">${perRow}</div>
+    <div style="margin-top:8px;padding:8px;border-radius:6px;background:${okAll?'#eaf7ee':'#fdeeee'};color:${okAll?'#2b8a3e':'#c92a2a'}">
+      ${okAll?'✅ 版面符合標準，可以套用。':'⚠️ 偵測到的影格偏少，可能版面不符（需 6 列×14 欄）。請確認圖片版面，或仍可嘗試套用觀察效果。'}
+    </div>`;
+}
+function drawCharPreview(cv, frames){
+  const wrap=document.getElementById('char-preview-wrap'); wrap.style.display='block';
+  const pc=document.getElementById('char-preview');
+  const cols=8, cellW=90, cellH=90, rows=6;
+  pc.width=cols*cellW; pc.height=rows*cellH;
+  const g=pc.getContext('2d'); g.fillStyle='#1b2430'; g.fillRect(0,0,pc.width,pc.height);
+  g.imageSmoothingEnabled=true;
+  for(let r=0;r<6;r++){
+    g.fillStyle='rgba(255,255,255,.5)'; g.font='10px sans-serif';
+    g.fillText(CHAR_ROW_LABELS[r], 4, r*cellH+12);
+    let shown=0;
+    for(let c=0;c<14&&shown<cols;c++){
+      const f=frames[r][c]; if(!f)continue;
+      const sx=f[0],sy=f[1],sw=f[2],sh=f[3];
+      const sc=Math.min((cellW-10)/sw,(cellH-24)/sh);
+      const dw=sw*sc, dh=sh*sc;
+      g.drawImage(cv, sx,sy,sw,sh, shown*cellW+(cellW-dw)/2, r*cellH+16+(cellH-16-dh), dw,dh);
+      shown++;
+    }
+  }
+}
+function applyCustomChar(){
+  if(!_charPending)return;
+  gameData.customPlayer={img:_charPending.img, frames:_charPending.frames, refH:_charPending.refH};
+  autoSave(); updateCharStatus(); closeModal('char-modal');
+  sysAlert('✅ 自訂主角已套用！\n按「▶️ 試玩」即可看到新角色。\n（編輯畫面的範例玩家仍顯示預設圖，不影響遊戲。）');
+}
+function removeCustomChar(){
+  if(!gameData.customPlayer){ closeModal('char-modal'); return; }
+  sysConfirm('確定恢復為預設主角？',()=>{
+    delete gameData.customPlayer; autoSave(); updateCharStatus(); closeModal('char-modal');
+  });
+}
+function updateCharStatus(){
+  const el=document.getElementById('g-customPlayer-status');
+  if(el) el.textContent = gameData.customPlayer ? '目前：自訂主角 ✓' : '目前：預設主角';
+}
+function downloadCharTemplate(){
+  const NROWS=6,NCOLS=14, cw=150, chh=190, padTop=40, padLeft=140;
+  const cv=document.createElement('canvas'); cv.width=padLeft+NCOLS*cw+20; cv.height=padTop+NROWS*chh+30;
+  const g=cv.getContext('2d');
+  g.fillStyle='#0d1117'; g.fillRect(0,0,cv.width,cv.height);
+  g.fillStyle='#e6edf3'; g.font='bold 20px sans-serif';
+  g.fillText('自訂主角精靈圖版面規格（6 列 × 14 欄）· 角色一律面向右', 20, 26);
+  const labels=['第1列 待機/瞄準','第2列 行走','第3列 奔跑×6+跳躍×4','第4列 射擊','第5列 光束/特殊','第6列 受傷×5+倒下×9'];
+  for(let r=0;r<NROWS;r++){
+    g.fillStyle='#7fdcff'; g.font='13px sans-serif';
+    g.fillText(labels[r], 8, padTop+r*chh+chh/2);
+    for(let c=0;c<NCOLS;c++){
+      const x=padLeft+c*cw, y=padTop+r*chh;
+      g.strokeStyle='#30363d'; g.lineWidth=1; g.strokeRect(x,y,cw-6,chh-6);
+      g.fillStyle='#243b53'; g.fillRect(x+cw/2-16,y+chh-70,32,50);
+      g.beginPath(); g.arc(x+cw/2,y+chh-78,12,0,Math.PI*2); g.fillStyle='#2f5170'; g.fill();
+      g.fillStyle='#455a75'; g.fillRect(x+cw/2+8,y+chh-60,26,7);
+      g.fillStyle='#8b98a5'; g.font='10px sans-serif'; g.fillText('R'+(r+1)+'C'+(c+1), x+6, y+14);
+      g.strokeStyle='#c9722a'; g.setLineDash([3,3]); g.beginPath(); g.moveTo(x+cw/2,y+chh-20); g.lineTo(x+cw/2,y+chh-8); g.stroke(); g.setLineDash([]);
+    }
+  }
+  g.fillStyle='#8b98a5'; g.font='12px sans-serif';
+  g.fillText('※ 建議純黑或透明背景 · 角色站在每格底部中央 · 整張圖寬 2000～3000px · 各格大小可不同（系統自動偵測邊界）', 20, cv.height-10);
+  const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='主角精靈圖版面規格.png'; a.click();
+}
+const CHAR_AI_PROMPT=`Create a 2D game character sprite sheet, side-scroller action game style, high detail, on a SOLID BLACK background.
+
+Layout: a grid of 6 ROWS and 14 COLUMNS (84 frames total). The character always FACES RIGHT and stands centered at the bottom of each cell.
+
+Row meaning (top to bottom), left to right within each row:
+- Row 1: idle / aiming stance (subtle breathing loop)
+- Row 2: walking cycle
+- Row 3: running cycle (first 6 frames) then jump (last 4 frames)
+- Row 4: shooting the weapon (muzzle flash appears in later frames)
+- Row 5: charged beam / special attack (build-up to a big blast)
+- Row 6: getting hurt (first 5 frames) then falling / knocked down / defeated (last 9 frames)
+
+Style: futuristic armored soldier, clean readable silhouette, consistent lighting from top-left, no ground shadow, no text or UI, no borders between cells. Each cell roughly 210x230 px, whole sheet about 2976x1432 px. Keep the character size and vertical baseline consistent across all frames.`;
+function copyCharPrompt(){
+  navigator.clipboard.writeText(CHAR_AI_PROMPT).then(
+    ()=>sysAlert('✅ AI 生圖提示詞已複製到剪貼簿！\n貼到 Midjourney / DALL·E / Stable Diffusion 等生圖工具即可。\n生成後把圖上傳到此處即可自動套用。'),
+    ()=>{ const ta=document.createElement('textarea'); ta.value=CHAR_AI_PROMPT;
+      ta.style.cssText='position:fixed;top:10%;left:5%;width:90%;height:60%;z-index:9999'; document.body.appendChild(ta); ta.select();
+      sysAlert('請手動複製反白的提示詞文字，完成後點確定關閉。'); });
+}
+
 function openGlobalSettings(){
   document.getElementById('g-startBg').value=gameData.startBgImg||'';
   updateSinglePreview(document.getElementById('g-startBg'),'prev-g-startBg');
   document.getElementById('g-subtitle').value=gameData.startSubtitle||'';
+  updateCharStatus();
   document.getElementById('g-designer').value=gameData.designer||'';
   document.getElementById('g-passcode').value=gameData.passcode||'';
   document.getElementById('g-theme').value=gameData.themeColor||'default';
@@ -2137,9 +2366,16 @@ Sheet.prototype.rect=function(row,col){
   const cx=this.c[col];const sh=(this.rhs&&this.rhs[row])||this.rh;
   return{sx:cx-this.cw/2,sy:this.t[row],sw:this.cw,sh};};
 const SOLDIER_FRAMES=[[[40,12,157,207],[256,13,157,206],[473,12,157,207],[690,12,157,207],[906,12,156,207],[1122,12,153,207],[1338,12,150,207],[1555,13,145,206],[1770,13,143,206],[1949,13,156,207],[2211,10,111,209],[2407,9,132,213],[2586,13,157,209],[2803,14,158,203]],[[34,259,164,205],[262,259,153,205],[475,259,159,205],[690,259,160,205],[900,259,162,203],[1125,259,150,205],[1332,259,156,203],[1554,259,146,205],[1768,259,145,204],[1994,260,131,204],[2215,259,123,205],[2423,261,127,203],[2631,259,132,204],[2855,260,118,204]],[[38,537,157,175],[257,533,157,179],[476,513,154,200],[689,497,154,212],[907,488,155,211],[1121,480,154,229],[1340,486,148,225],[1556,483,144,206],[1775,489,138,207],[1991,492,134,208],[2204,493,134,205],[2424,509,126,201],[2647,534,116,178],[2838,541,131,166]],[[23,749,170,202],[239,749,168,201],[455,749,170,201],[670,749,171,201],[887,748,175,202],[1105,748,170,201],[1320,749,168,205],[1538,750,162,204],[1757,750,156,204],[1974,749,151,205],[2125,752,213,202],[2407,750,143,203],[2623,752,140,198],[2829,751,147,198]],[[32,985,169,201],[249,984,170,203],[463,984,174,202],[681,984,169,203],[887,985,175,208],[1111,974,164,213],[1275,954,213,232],[1488,954,212,234],[1700,954,213,234],[1913,954,212,233],[2195,954,143,235],[2416,991,134,198],[2634,992,129,201],[2846,993,130,196]],[[34,1222,113,199],[253,1223,124,199],[466,1223,129,197],[678,1226,141,195],[890,1193,122,234],[1098,1244,174,178],[1299,1232,189,200],[1515,1258,185,174],[1731,1261,182,171],[1950,1271,175,153],[2125,1271,213,153],[2384,1240,166,184],[2604,1193,159,236],[2823,1356,94,49]]];
-const SOLDIER=new Sheet('NEWC.png',{centers:[106,319,531,744,957,1169,1382,1594,1807,2019,2232,2445,2657,2870],
-  rowTops:[9,259,480,748,954,1193],rowHeights:[213,206,233,206,239,239],rowH:239,cellW:213,
-  frames:SOLDIER_FRAMES,refH:207});
+// 主角精靈：若專案含自訂角色則使用之，否則用內建 NEWC.png
+let SOLDIER;
+if(P.customPlayer&&P.customPlayer.img&&P.customPlayer.frames){
+  const cp=P.customPlayer;
+  SOLDIER=new Sheet(cp.img,{centers:[],rowTops:[],rowH:cp.refH,cellW:0,frames:cp.frames,refH:cp.refH});
+}else{
+  SOLDIER=new Sheet('NEWC.png',{centers:[106,319,531,744,957,1169,1382,1594,1807,2019,2232,2445,2657,2870],
+    rowTops:[9,259,480,748,954,1193],rowHeights:[213,206,233,206,239,239],rowH:239,cellW:213,
+    frames:SOLDIER_FRAMES,refH:207});
+}
 const ROBOT=new Sheet('ROBOT.png',{centers:[96,275,449,615,787,960,1140,1309,1479,1655,1820,1984],
   rowTops:[56,243,415,599,774,947],rowH:160,cellW:172});
 const SOLDIER_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},

@@ -153,6 +153,10 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       <div id="stage-wrap">
         <canvas id="stage"></canvas>
         <div id="stage-hint">請在畫面上點擊以放置</div>
+        <div id="stage-charbadge" style="position:absolute;top:8px;left:8px;z-index:22;display:flex;align-items:center;gap:6px;background:rgba(20,30,45,.85);border:1px solid #3a6a8a;border-radius:10px;padding:4px 8px 4px 4px">
+          <canvas id="stage-charThumb" width="44" height="44" style="width:44px;height:44px;background:#0e1620;border-radius:7px"></canvas>
+          <span id="stage-charLabel" style="color:#cde;font-size:.68em;line-height:1.3">主角</span>
+        </div>
         <div id="stage-info"></div>
         <div id="stage-tip" style="position:absolute;display:none;background:rgba(20,30,45,.95);color:#cde;padding:6px 11px;border-radius:8px;font-size:.72em;z-index:25;pointer-events:none;border:1px solid #3a6a8a;white-space:nowrap"></div>
       </div>
@@ -620,7 +624,8 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
     <div class="hint-note" style="background:#f0f7ff;border-color:#b6d4ea;color:#0369a1">
       可上傳自己的角色精靈圖取代預設主角。系統會自動去背、偵測每個動作的畫格。<b>務必依照規定的版面</b>（6 列 × 14 欄，每列一種動作）。
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px">
+      <canvas id="g-charThumb" width="72" height="72" style="width:72px;height:72px;background:#1b2430;border-radius:8px;border:1px solid #dde5ee"></canvas>
       <button class="btn-act" style="width:auto;margin:0;padding:8px 16px" onclick="openCharacterModal()">🖼️ 上傳／設定自訂主角</button>
       <span id="g-customPlayer-status" style="font-size:.8em;color:#666"></span>
     </div>
@@ -699,7 +704,7 @@ const PROP_SCALES={"lab_00": 0.889, "lab_01": 0.868, "lab_02": 0.868, "lab_03": 
 // 玩家/敵人精靈圖（所見即所得預覽用）
 let previewSprites={};
 function loadPreviewSprites(){
-  const load=(k,src)=>{const im=new Image();im.onload=()=>{previewSprites[k]=im;redrawStage();};im.src=src;};
+  const load=(k,src)=>{const im=new Image();im.onload=()=>{previewSprites[k]=im;redrawStage();updateAllCharThumbs();};im.src=src;};
   load('player','NEWC.png'); load('enemy','ROBOT.png');
 }
 // 士兵 idle 首幀框架、機器人 idle 首幀框架（供預覽）
@@ -2001,35 +2006,41 @@ function detectCharSheet(img){
   const removeBg=document.getElementById('char-removebg').checked;
   const tol=parseInt(document.getElementById('char-tol').value)||40;
   if(removeBg){
-    // 從外框取樣，找出主要背景色（可能是純黑，或棋盤格的兩種灰）
-    const border=[];
-    for(let x=0;x<W;x+=2){ border.push([d[(x)*4],d[(x)*4+1],d[(x)*4+2]]);
-      const b=((H-1)*W+x)*4; border.push([d[b],d[b+1],d[b+2]]); }
-    for(let y=0;y<H;y+=2){ const l=(y*W)*4; border.push([d[l],d[l+1],d[l+2]]);
-      const rr=(y*W+W-1)*4; border.push([d[rr],d[rr+1],d[rr+2]]); }
-    // 量化統計外框顏色
-    const cnt={};
-    border.forEach(c=>{ const k=((c[0]>>3)<<3)+','+((c[1]>>3)<<3)+','+((c[2]>>3)<<3);
-      cnt[k]=(cnt[k]||0)+1; });
-    const sorted=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
-    const bgcols=[]; const need=border.length*0.06;
-    for(const [k,n] of sorted){
-      if(bgcols.length>=4) break;
-      const [r,g,b]=k.split(',').map(Number);
-      const sat=Math.max(r,g,b)-Math.min(r,g,b);
-      const isBlackish=(r+g+b)<70;
-      const isGrayish=sat<=36;
-      if((isBlackish||isGrayish) && n>need){
-        if(bgcols.every(u=>(u[0]-r)**2+(u[1]-g)**2+(u[2]-b)**2>500)) bgcols.push([r,g,b]);
-      }
-    }
-    if(!bgcols.length) bgcols.push([0,0,0]);   // 後備：純黑
-    const t2=tol*tol;
+    const N=W*H;
+    // 1) 全域統計「平面中性色」（飽和度低），找出占比高的背景色（純黑、灰格等，可多個）
+    const hist={};
     for(let i=0;i<d.length;i+=4){
-      for(const c of bgcols){
-        const dr=d[i]-c[0],dg=d[i+1]-c[1],db=d[i+2]-c[2];
-        if(dr*dr+dg*dg+db*db<t2){ d[i+3]=0; break; }
-      }
+      const r=d[i],g=d[i+1],b=d[i+2];
+      const sat=Math.max(r,g,b)-Math.min(r,g,b);
+      if(sat<=12){ const k=((r>>2)<<2)+','+((g>>2)<<2)+','+((b>>2)<<2); hist[k]=(hist[k]||0)+1; }
+    }
+    const sorted=Object.entries(hist).sort((a,b)=>b[1]-a[1]);
+    const bgcols=[];
+    for(const [k,n] of sorted){
+      if(bgcols.length>=5) break;
+      if(n/N < 0.02) break;              // 至少占 2% 才算背景
+      const [r,g,b]=k.split(',').map(Number);
+      if(bgcols.every(u=>(u[0]-r)**2+(u[1]-g)**2+(u[2]-b)**2>300)) bgcols.push([r,g,b]);
+    }
+    if(!bgcols.length) bgcols.push([0,0,0]);
+    const t2=tol*tol;
+    // 2) 去除背景色（緊縮容許度以保留角色的灰色盔甲）
+    const bgTol=Math.min(tol,34), bt2=bgTol*bgTol;
+    const bgMask=new Uint8Array(N);
+    for(let p=0,i=0;p<N;p++,i+=4){
+      const r=d[i],g=d[i+1],b=d[i+2];
+      for(const c of bgcols){ const dr=r-c[0],dg=g-c[1],db=b-c[2];
+        if(dr*dr+dg*dg+db*db<bt2){ d[i+3]=0; bgMask[p]=1; break; } }
+    }
+    // 3) 移除格線標籤白字：僅在「幾乎全為背景」的掃描列（列間空隙帶）移除近白低飽和像素
+    const rowBgFrac=new Float32Array(H);
+    for(let y=0;y<H;y++){ let s=0; const base=y*W; for(let x=0;x<W;x++) s+=bgMask[base+x]; rowBgFrac[y]=s/W; }
+    for(let y=0;y<H;y++){
+      if(rowBgFrac[y]<0.85) continue;    // 只處理空隙/標籤帶
+      const base=y*W;
+      for(let x=0;x<W;x++){ const i=(base+x)*4; const r=d[i],g=d[i+1],b=d[i+2];
+        const sat=Math.max(r,g,b)-Math.min(r,g,b);
+        if(r>200&&g>200&&b>200&&sat<=20) d[i+3]=0; }
     }
     cx.putImageData(data,0,0);
   }
@@ -2123,6 +2134,38 @@ function removeCustomChar(){
 function updateCharStatus(){
   const el=document.getElementById('g-customPlayer-status');
   if(el) el.textContent = gameData.customPlayer ? '目前：自訂主角 ✓' : '目前：預設主角';
+  updateAllCharThumbs();
+}
+// 目前主角的待機首幀縮圖（自訂或預設），畫到指定 canvas
+let _customCharImg=null, _customCharImgSrc=null;
+function renderCharThumb(canvasId){
+  const cv=document.getElementById(canvasId); if(!cv)return;
+  const g=cv.getContext('2d'); g.clearRect(0,0,cv.width,cv.height);
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+  const cp=gameData.customPlayer;
+  const draw=(img,f)=>{
+    if(!img||!img.complete||!img.naturalWidth)return;
+    const [sx,sy,sw,sh]=f;
+    const pad=4, availW=cv.width-pad*2, availH=cv.height-pad*2;
+    const sc=Math.min(availW/sw, availH/sh);
+    const dw=sw*sc, dh=sh*sc;
+    g.drawImage(img, sx,sy,sw,sh, (cv.width-dw)/2, cv.height-pad-dh, dw,dh);
+  };
+  if(cp&&cp.img&&cp.frames&&cp.frames[0]&&cp.frames[0][0]){
+    if(_customCharImgSrc!==cp.img){ _customCharImg=new Image();
+      _customCharImg.onload=()=>{updateAllCharThumbs();}; _customCharImg.src=cp.img; _customCharImgSrc=cp.img; }
+    draw(_customCharImg, cp.frames[0][0]);
+  }else{
+    const im=previewSprites.player, f=PREVIEW_FRAME.player;
+    if(im&&f) draw(im, [f.sx,f.sy,f.sw,f.sh]);
+    else { g.fillStyle='#455a75'; g.fillRect(cv.width/2-10,cv.height-30,20,26); }
+  }
+}
+function updateAllCharThumbs(){
+  renderCharThumb('g-charThumb');
+  renderCharThumb('stage-charThumb');
+  const lbl=document.getElementById('stage-charLabel');
+  if(lbl) lbl.textContent = gameData.customPlayer ? '主角(自訂)' : '主角(預設)';
 }
 function downloadCharTemplate(){
   const NROWS=6,NCOLS=14, cw=150, chh=190, padTop=40, padLeft=140;
@@ -2329,7 +2372,7 @@ function importTXT(ev){
         }}));
       document.getElementById('game-name').value=gameData.gameName||'';
       autoSave(); renderRoomList();
-      const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]);
+      const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]); updateAllCharThumbs();
       sysAlert('匯入成功！');
     }catch(err){ sysAlert('格式錯誤：'+err.message); }
     ev.target.value='';
@@ -2345,7 +2388,7 @@ function loadDemo(){
     if(!gameData.rooms)gameData.rooms={};
     document.getElementById('game-name').value=gameData.gameName||'';
     autoSave(); renderRoomList();
-    const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]);
+    const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]); updateAllCharThumbs();
     sysAlert('✅ 示範專案已載入！\n共 4 個房間，含資訊/檢驗/互動/穿越/機台觸發點、樓中樓與清敵結局。\n按上方「▶️ 試玩」即可遊玩。');
   });
 }
@@ -2375,7 +2418,7 @@ window.addEventListener('load',()=>{
   renderRoomList();
   const ks=Object.keys(gameData.rooms);
   if(ks.length) selectRoom(ks[0]); else createNewRoom();
-  loadProps(); loadPreviewSprites(); resizeStage();
+  loadProps(); loadPreviewSprites(); resizeStage(); updateAllCharThumbs();
 });
 </script>
 <script id="raw-runtime" type="text/plain">

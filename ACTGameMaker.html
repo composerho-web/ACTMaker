@@ -2276,36 +2276,48 @@ function processSpriteSheet(img, removeBg, tol){
   const frames=[]; let refH=0, detected=0, empty=0;
   for(let r=0;r<NROWS;r++){
     const y0=Math.floor(r*rowH), y1=Math.floor((r+1)*rowH);
-    // 該列每個 x 的垂直密度（>60 alpha 的像素數）
+    const bandH=y1-y0;
+    // 該列每個 x 的垂直密度
     const colDen=new Int32Array(W);
     for(let x=0;x<W;x++){ let dcount=0; for(let y=y0;y<y1;y++){ if(al[y*W+x]>60)dcount++; } colDen[x]=dcount; }
     const rowFrames=[];
     for(let c=0;c<NCOLS;c++){
       const slotC=(c+0.5)*colW;
-      // 搜尋窗口：以格中心為主，允許 ±0.95 格（涵蓋漂移與往右延伸的子彈/光束）
-      const lo=Math.max(0,Math.floor(slotC-colW*0.95)), hi=Math.min(W,Math.ceil(slotC+colW*0.95));
-      // 找出窗口內的密度區段
-      let runs=[], ins=false, s=0;
-      for(let x=lo;x<hi;x++){
-        if(colDen[x]>=2){ if(!ins){ins=true;s=x;} } else { if(ins){ins=false;runs.push([s,x]);} }
-      }
-      if(ins)runs.push([s,hi]);
-      if(!runs.length){ rowFrames.push(null); empty++; continue; }
-      // 合併間距小的區段（同一角色的內部縫隙，如腳之間、身體與鳥喙之間）
-      const gapThr=Math.max(8,colW*0.18);
-      const merged=[runs[0].slice()];
-      for(let k=1;k<runs.length;k++){ if(runs[k][0]-merged[merged.length-1][1]<=gapThr) merged[merged.length-1][1]=runs[k][1]; else merged.push(runs[k].slice()); }
-      // 選擇「密度質心最接近格中心」的區段（可正確處理角色在格內漂移的情形）
-      let best=null, bestD=1e9;
-      for(const [a2,b2] of merged){
-        let wsum=0, xsum=0;
-        for(let x=a2;x<b2;x++){ wsum+=colDen[x]; xsum+=x*colDen[x]; }
-        const centroid = wsum>0 ? xsum/wsum : (a2+b2)/2;
-        const dd=Math.abs(centroid-slotC);
-        if(dd<bestD){ bestD=dd; best=[a2,b2]; }
-      }
-      if(!best || bestD>colW*0.65){ rowFrames.push(null); empty++; continue; }
-      const xa=best[0], xb=best[1];
+      const lo=Math.max(0,Math.floor(slotC-colW*0.6)), hi=Math.min(W,Math.ceil(slotC+colW*0.6));
+      const bodyThr=Math.max(6, 0.35*bandH);
+      // 步驟1：以「實心身體」密度找角色本體（先用高門檻，找不到再放寬）
+      let strongCols=[]; for(let x=lo;x<hi;x++){ if(colDen[x]>=bodyThr) strongCols.push(x); }
+      if(!strongCols.length){ for(let x=lo;x<hi;x++){ if(colDen[x]>=2) strongCols.push(x); } }
+      if(!strongCols.length){ rowFrames.push(null); empty++; continue; }
+      // 將實心欄位分組，取最接近格中心者為本體
+      let sruns=[], sPrev=null, sStart=null;
+      for(const x of strongCols){ if(sPrev===null||x-sPrev>3){ if(sStart!==null)sruns.push([sStart,sPrev+1]); sStart=x; } sPrev=x; }
+      sruns.push([sStart,sPrev+1]);
+      let bodyRun=sruns[0], bd=1e9;
+      for(const rn of sruns){ const mid=(rn[0]+rn[1])/2, dd=Math.abs(mid-slotC); if(dd<bd){bd=dd;bodyRun=rn;} }
+      const bodyC=(bodyRun[0]+bodyRun[1])/2;
+      let bodyPeak=0; for(let x=bodyRun[0];x<bodyRun[1];x++) bodyPeak=Math.max(bodyPeak,colDen[x]);
+      // 步驟2：從本體中心向左右擴展，遇到「空隙後又出現另一個實心body」即停（避免抓到相鄰角色）
+      const expand=(dir)=>{
+        let x=Math.round(bodyC), gap=0, seenValley=false;
+        while(x>lo && x<hi){
+          const nx = dir<0 ? x-1 : x;
+          const dn = colDen[nx];
+          if(dn>=2){
+            if(seenValley && dn>=bodyThr*0.8) return x;   // 已越過空谷又遇實心 → 下一個角色，停止
+            gap=0;
+          } else {
+            gap++;
+            if(gap>=4) return x - dir*gap;                // 連續空白 → 角色邊界
+          }
+          if(dn < bodyPeak*0.25) seenValley=true;
+          x += dir;
+        }
+        return x;
+      };
+      let xa=expand(-1), xb=expand(1);
+      if(xa>=xb){ rowFrames.push(null); empty++; continue; }
+      if(xb-xa>colW){ xa=Math.max(xa,Math.round(bodyC-colW*0.5)); xb=Math.min(xb,Math.round(bodyC+colW*0.5)); }
       // 緊縮上下邊界
       let ya=-1,yb=-1;
       for(let y=y0;y<y1;y++){ let den=0; for(let x=xa;x<xb;x++){ if(al[y*W+x]>60){den++; if(den>=2)break;} }

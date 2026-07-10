@@ -132,7 +132,6 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
   <div class="sp"></div>
   <button class="tbtn" onclick="exportTXT()">📤 匯出專案</button>
   <label class="tbtn" style="display:inline-block">📥 匯入專案<input type="file" accept=".txt,.json" style="display:none" onchange="importTXT(event)"></label>
-  <button class="tbtn" onclick="loadDemo()">🎁 載入示範</button>
   <button class="tbtn go" onclick="previewGame()">▶️ 試玩</button>
   <button class="tbtn warn" onclick="exportGameZip()">📦 匯出遊戲(ZIP)</button>
 </div>
@@ -300,11 +299,12 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
 
     <h3 class="section-title">👾 敵人設定</h3>
     <div class="form-row">
-      <div class="form-group"><label>敵人數量</label><input type="number" id="r-enemyCount" class="form-control" value="2" min="0" max="12"></div>
-      <div class="form-group"><label>每隻敵人能量 (HP)</label><input type="number" id="r-enemyHp" class="form-control" value="60" min="1"></div>
-      <div class="form-group"><label>敵人攻擊力</label><input type="number" id="r-enemyAtk" class="form-control" value="10" min="0"></div>
+      <div class="form-group"><label>內建機器人數量</label><input type="number" id="r-enemyCount" class="form-control" value="2" min="0" max="12"></div>
+      <div class="form-group"><label>每隻能量 (HP)</label><input type="number" id="r-enemyHp" class="form-control" value="60" min="1"></div>
+      <div class="form-group"><label>攻擊力</label><input type="number" id="r-enemyAtk" class="form-control" value="10" min="0"></div>
     </div>
-    <div class="hint-note">敵人會在此房間隨機生成（避開家具）。清空敵人後房間標記為已清除。</div>
+    <div class="hint-note">「內建機器人」是預設敵人。下方可加入你在全域設定新增的自訂敵人，並各自設定數量與參數。清空所有敵人後房間標記為已清除。</div>
+    <div id="r-enemy-spawns" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
 
     <h3 class="section-title">📜 前情提要</h3>
     <div class="form-group">
@@ -553,6 +553,54 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
   </div>
 </div></div>
 
+<!-- ============ 自訂敵人編輯 ============ -->
+<div class="modal-backdrop" id="enemy-modal"><div class="panel" style="width:820px;max-width:96vw">
+  <div class="panel-header"><h2>👾 敵人類別設定</h2><button class="btn-close" onclick="closeModal('enemy-modal')">×</button></div>
+  <div class="panel-body">
+    <div class="form-row">
+      <div class="form-group"><label>敵人名稱</label><input type="text" id="en-name" class="form-control" placeholder="例如：巡邏機兵"></div>
+      <div class="form-group"><label>攻擊方式</label>
+        <select id="en-attackType" class="form-control">
+          <option value="gun">🔫 槍械攻擊式（遠距發射）</option>
+          <option value="melee">👊 近身攻擊式（貼近打擊）</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>預設體力(HP)</label><input type="number" id="en-hp" class="form-control" value="50" min="1"></div>
+      <div class="form-group"><label>預設攻擊力</label><input type="number" id="en-atk" class="form-control" value="10" min="1"></div>
+      <div class="form-group"><label>預設移動速度</label><input type="number" id="en-speed" class="form-control" value="2" min="0.5" step="0.5"></div>
+    </div>
+
+    <div class="hint-note" style="background:#fff8e6;border-color:#f0d890;color:#7a5a00">
+      精靈圖版面同主角（6 列×14 欄）：第1列待機、2行走、3奔跑+跳、4攻擊、5特殊、6受傷+倒下。<b>不上傳圖則使用內建機器人外觀。</b>可用主角視窗的「版面規格圖 / AI 提示詞」製作。
+    </div>
+    <div class="form-group">
+      <label>上傳敵人精靈圖（可留空 = 用內建機器人）</label>
+      <input type="file" id="en-file" accept="image/png,image/jpeg" class="form-control" onchange="handleEnemyUpload(event)">
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="en-removebg" checked style="width:18px;height:18px">
+        <label style="margin:0">自動去背</label>
+      </div>
+      <div class="form-group"><label>去背容許度：<span id="en-tol-val">40</span></label>
+        <input type="range" id="en-tol" min="10" max="120" value="40" style="width:100%" oninput="document.getElementById('en-tol-val').textContent=this.value">
+      </div>
+    </div>
+    <div id="en-diagnosis" style="display:none;background:#f7f9fc;border:1px solid #dde5ee;border-radius:8px;padding:12px;margin-top:8px;font-size:.82em"></div>
+    <div id="en-preview-wrap" style="display:none;margin-top:10px">
+      <div style="font-weight:bold;margin-bottom:6px">偵測結果預覽</div>
+      <canvas id="en-preview" style="width:100%;background:#1b2430;border-radius:8px"></canvas>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:space-between;margin-top:14px">
+      <button class="btn-act btn-cancel" style="width:auto;margin:0;padding:8px 16px" id="en-delete-btn" onclick="deleteEnemy()">🗑️ 刪除此敵人</button>
+      <button class="btn-act" style="width:auto;margin:0;padding:8px 16px" onclick="saveEnemy()">✅ 儲存敵人</button>
+    </div>
+  </div>
+</div></div>
+
 <!-- ============ 全域設定 ============ -->
 <div class="modal-backdrop" id="global-modal"><div class="panel">
   <div class="panel-header"><h2>⚙️ 全域設定</h2><button class="btn-close" onclick="closeModal('global-modal')">×</button></div>
@@ -629,6 +677,13 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       <button class="btn-act" style="width:auto;margin:0;padding:8px 16px" onclick="openCharacterModal()">🖼️ 上傳／設定自訂主角</button>
       <span id="g-customPlayer-status" style="font-size:.8em;color:#666"></span>
     </div>
+
+    <h3 class="section-title">👾 自訂敵人（最多 6 種）</h3>
+    <div class="hint-note" style="background:#fff0f0;border-color:#eabcbc;color:#9a3030">
+      可新增多種敵人（最多 6 種），每種可上傳精靈圖（版面同主角：6 列×14 欄），並設定<b>攻擊方式</b>（槍械遠攻／近身攻擊）與預設數值。之後在各房間可分別選擇每種敵人的數量與參數。未上傳圖者使用內建機器人外觀。
+    </div>
+    <div id="g-enemy-list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+    <button class="btn-act" style="width:auto;margin:8px 0 0;padding:8px 16px;background:#c0392b" onclick="openEnemyModal(null)">➕ 新增敵人類別</button>
 
     <h3 class="section-title">⏱️ 限制設定</h3>
     <div class="form-row">
@@ -763,7 +818,7 @@ function newGameData(){
     backpackEnabled:false, timeLimitEnabled:false, timeLimitSeconds:300,
     // ACT 專屬：玩家武器與能量（取代 Exploration 的體力設定）
     weapon:"blaster", weaponDmg:20, weaponCd:14, playerHp:100, lives:3, playerSpeed:4,
-    lang:"zh", items:[], rooms:{}
+    lang:"zh", items:[], enemies:[], rooms:{}
   };
 }
 let currentRoomId=null, activeView='room', editMode='select', objSource='builtin';
@@ -881,6 +936,7 @@ function openRoomSettings(){
   document.getElementById('r-enemyCount').value=r.enemyCount;
   document.getElementById('r-enemyHp').value=r.enemyHp;
   document.getElementById('r-enemyAtk').value=r.enemyAtk;
+  renderRoomEnemySpawns(r);
   document.getElementById('r-endCondition').value=r.endCondition||'arrive';
   initMediaList('list-r-preMedia',r.preludeMedia,'prev-r-preMedia');
   document.getElementById('r-preStory').value=r.preludeStory||'';
@@ -913,6 +969,7 @@ function saveRoomSettings(){
   r.enemyCount=parseInt(document.getElementById('r-enemyCount').value)||0;
   r.enemyHp=parseInt(document.getElementById('r-enemyHp').value)||60;
   r.enemyAtk=parseInt(document.getElementById('r-enemyAtk').value)||10;
+  saveRoomEnemySpawns(r);
   r.preludeMedia=(activeMediaArrays['list-r-preMedia']||[]).filter(x=>x.trim()!=='');
   r.preludeStory=document.getElementById('r-preStory').value;
   r.endMedia=(activeMediaArrays['list-r-endMedia']||[]).filter(x=>x.trim()!=='');
@@ -1518,7 +1575,13 @@ function loadCustomObjImage(o){
   im.onload=()=>{
     if(o.removeBg){
       const durl=removeBackground(im, o.tol||40);
-      if(durl){ o.imgProcessed=durl; const p=new Image(); p.onload=redrawStage; p.src=durl; o._img=p; redrawStage(); autoSave(); return; }
+      if(durl){
+        // 壓縮去背後的物件圖（上限 512px，保留透明）以控制檔案大小
+        const tmp=new Image();
+        tmp.onload=()=>{ o.imgProcessed=compressImage(tmp,512,{forcePng:true});
+          const p=new Image(); p.onload=redrawStage; p.src=o.imgProcessed; o._img=p; redrawStage(); autoSave(); };
+        tmp.src=durl; return;
+      }
       else { sysAlert('⚠️ 此圖片因跨網域限制無法自動去背（伺服器未開放讀取像素）。\n已改用原圖放置。\n建議：使用支援 CORS 的圖床（GitHub raw、jsDelivr）即可啟用去背。'); }
     }
     o._img=im; redrawStage(); autoSave();
@@ -1977,6 +2040,26 @@ function renderEditorItems(){
 
 /* ================= 全域設定（移植 + 武器/能量） ================= */
 /* ================= 自訂主角 ================= */
+/* 影像壓縮：等比例縮到 maxDim 內，輸出 dataURL（保留透明用 PNG，否則 JPEG） */
+function compressImage(imgOrCanvas, maxDim, opts){
+  opts=opts||{};
+  const srcW=imgOrCanvas.naturalWidth||imgOrCanvas.width;
+  const srcH=imgOrCanvas.naturalHeight||imgOrCanvas.height;
+  let sc=Math.min(1, maxDim/Math.max(srcW,srcH));
+  const w=Math.max(1,Math.round(srcW*sc)), h=Math.max(1,Math.round(srcH*sc));
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  const cx=cv.getContext('2d'); cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high';
+  cx.drawImage(imgOrCanvas,0,0,w,h);
+  // 判斷是否有透明像素 → 有則用 PNG（保留去背），否則用 JPEG（更小）
+  let hasAlpha=opts.forcePng||false;
+  if(!hasAlpha){
+    try{ const dd=cx.getImageData(0,0,w,h).data;
+      for(let i=3;i<dd.length;i+=4){ if(dd[i]<250){ hasAlpha=true; break; } } }catch(e){ hasAlpha=true; }
+  }
+  return hasAlpha ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', opts.quality||0.82);
+}
+function dataURLSizeKB(u){ return Math.round((u.length*3/4)/1024); }
+
 let _charPending=null;   // {img(dataURL), frames, refH, sheetW, sheetH}
 const CHAR_ROW_LABELS=['待機/瞄準','行走','奔跑+跳躍','射擊','光束/特殊','受傷+倒下'];
 function openCharacterModal(){
@@ -1995,19 +2078,18 @@ function handleCharUpload(ev){
   rd.readAsDataURL(f);
 }
 // 6 列 × 14 欄，逐格偵測精確邊界（含去背）
-function detectCharSheet(img){
+// 通用：處理精靈圖（去背+逐格偵測+壓縮），回傳 {img, frames, refH, detected, empty, W, H, sizeKB} 或 null
+function processSpriteSheet(img, removeBg, tol){
   const NROWS=6, NCOLS=14;
   const W=img.naturalWidth, H=img.naturalHeight;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const cx=cv.getContext('2d'); cx.drawImage(img,0,0);
   let data;
-  try{ data=cx.getImageData(0,0,W,H); }catch(e){ sysAlert('無法讀取圖片像素（可能是跨網域限制）。請下載到本機後再上傳。'); return; }
+  try{ data=cx.getImageData(0,0,W,H); }catch(e){ sysAlert('無法讀取圖片像素（可能是跨網域限制）。請下載到本機後再上傳。'); return null; }
   const d=data.data;
-  const removeBg=document.getElementById('char-removebg').checked;
-  const tol=parseInt(document.getElementById('char-tol').value)||40;
+  tol=tol||40;
   if(removeBg){
     const N=W*H;
-    // 1) 全域統計「平面中性色」（飽和度低），找出占比高的背景色（純黑、灰格等，可多個）
     const hist={};
     for(let i=0;i<d.length;i+=4){
       const r=d[i],g=d[i+1],b=d[i+2];
@@ -2018,13 +2100,11 @@ function detectCharSheet(img){
     const bgcols=[];
     for(const [k,n] of sorted){
       if(bgcols.length>=5) break;
-      if(n/N < 0.02) break;              // 至少占 2% 才算背景
+      if(n/N < 0.02) break;
       const [r,g,b]=k.split(',').map(Number);
       if(bgcols.every(u=>(u[0]-r)**2+(u[1]-g)**2+(u[2]-b)**2>300)) bgcols.push([r,g,b]);
     }
     if(!bgcols.length) bgcols.push([0,0,0]);
-    const t2=tol*tol;
-    // 2) 去除背景色（緊縮容許度以保留角色的灰色盔甲）
     const bgTol=Math.min(tol,34), bt2=bgTol*bgTol;
     const bgMask=new Uint8Array(N);
     for(let p=0,i=0;p<N;p++,i+=4){
@@ -2032,11 +2112,10 @@ function detectCharSheet(img){
       for(const c of bgcols){ const dr=r-c[0],dg=g-c[1],db=b-c[2];
         if(dr*dr+dg*dg+db*db<bt2){ d[i+3]=0; bgMask[p]=1; break; } }
     }
-    // 3) 移除格線標籤白字：僅在「幾乎全為背景」的掃描列（列間空隙帶）移除近白低飽和像素
     const rowBgFrac=new Float32Array(H);
     for(let y=0;y<H;y++){ let s=0; const base=y*W; for(let x=0;x<W;x++) s+=bgMask[base+x]; rowBgFrac[y]=s/W; }
     for(let y=0;y<H;y++){
-      if(rowBgFrac[y]<0.85) continue;    // 只處理空隙/標籤帶
+      if(rowBgFrac[y]<0.85) continue;
       const base=y*W;
       for(let x=0;x<W;x++){ const i=(base+x)*4; const r=d[i],g=d[i+1],b=d[i+2];
         const sat=Math.max(r,g,b)-Math.min(r,g,b);
@@ -2073,13 +2152,29 @@ function detectCharSheet(img){
     frames.push(rowFrames);
   }
   if(!refH){ for(const f of frames[0]) if(f) refH=Math.max(refH,f[3]); }
-  const processedURL=cv.toDataURL('image/png');
-  _charPending={img:processedURL, frames, refH: refH||200, sheetW:W, sheetH:H};
-  showCharDiagnosis(frames, W, H, detected, empty, removeBg);
-  drawCharPreview(cv, frames);
-  document.getElementById('char-apply-btn').style.display=(detected>=60)?'inline-block':'none';
+  const maxDim=2048;
+  const compScale=Math.min(1, maxDim/Math.max(W,H));
+  const processedURL=compressImage(cv, maxDim, {forcePng:true});
+  let outFrames=frames, outRefH=refH||200;
+  if(compScale<1){
+    outFrames=frames.map(row=>row.map(f=>f?[Math.round(f[0]*compScale),Math.round(f[1]*compScale),
+      Math.max(1,Math.round(f[2]*compScale)),Math.max(1,Math.round(f[3]*compScale))]:null));
+    outRefH=Math.max(1,Math.round(outRefH*compScale));
+  }
+  return {img:processedURL, frames:outFrames, refH:outRefH, detected, empty, W, H,
+          previewCanvas:cv, previewFrames:frames, sizeKB:dataURLSizeKB(processedURL)};
 }
-function showCharDiagnosis(frames, W, H, detected, empty, removeBg){
+function detectCharSheet(img){
+  const removeBg=document.getElementById('char-removebg').checked;
+  const tol=parseInt(document.getElementById('char-tol').value)||40;
+  const res=processSpriteSheet(img, removeBg, tol);
+  if(!res) return;
+  _charPending={img:res.img, frames:res.frames, refH:res.refH, sheetW:Math.round(res.W), sheetH:Math.round(res.H)};
+  showCharDiagnosis(res.previewFrames, res.W, res.H, res.detected, res.empty, removeBg, res.sizeKB);
+  drawCharPreview(res.previewCanvas, res.previewFrames);
+  document.getElementById('char-apply-btn').style.display=(res.detected>=60)?'inline-block':'none';
+}
+function showCharDiagnosis(frames, W, H, detected, empty, removeBg, sizeKB){
   const el=document.getElementById('char-diagnosis'); el.style.display='block';
   const perRow=frames.map((row,i)=>{
     const n=row.filter(Boolean).length;
@@ -2091,7 +2186,7 @@ function showCharDiagnosis(frames, W, H, detected, empty, removeBg){
   const okAll=detected>=60;
   el.innerHTML=`
     <div style="font-weight:bold;margin-bottom:6px">🔍 診斷結果</div>
-    <div>圖片尺寸：${W} × ${H} px　｜　去背：${removeBg?'已啟用':'未啟用'}</div>
+    <div>圖片尺寸：${W} × ${H} px　｜　去背：${removeBg?'已啟用':'未啟用'}${sizeKB?'　｜　壓縮後：約 '+sizeKB+' KB':''}</div>
     <div>偵測到有效影格：<b>${detected}</b> / 84　（空格 ${empty}）</div>
     <div style="margin-top:6px;border-top:1px dashed #ccd;padding-top:6px">${perRow}</div>
     <div style="margin-top:8px;padding:8px;border-radius:6px;background:${okAll?'#eaf7ee':'#fdeeee'};color:${okAll?'#2b8a3e':'#c92a2a'}">
@@ -2213,11 +2308,174 @@ function copyCharPrompt(){
       sysAlert('請手動複製反白的提示詞文字，完成後點確定關閉。'); });
 }
 
+/* ================= 自訂敵人 ================= */
+let _enemyPending=null;   // 暫存偵測結果 {img,frames,refH}
+let _editingEnemyId=null; // 正在編輯的敵人 id（null=新增）
+function ensureEnemies(){ if(!Array.isArray(gameData.enemies)) gameData.enemies=[]; return gameData.enemies; }
+function openEnemyModal(id){
+  closeModal('global-modal');
+  ensureEnemies();
+  _enemyPending=null; _editingEnemyId=id;
+  document.getElementById('en-diagnosis').style.display='none';
+  document.getElementById('en-preview-wrap').style.display='none';
+  const del=document.getElementById('en-delete-btn');
+  if(id){
+    const e=gameData.enemies.find(x=>x.id===id);
+    document.getElementById('en-name').value=e.name||'';
+    document.getElementById('en-attackType').value=e.attackType||'gun';
+    document.getElementById('en-hp').value=e.hp||50;
+    document.getElementById('en-atk').value=e.atk||10;
+    document.getElementById('en-speed').value=e.speed||2;
+    del.style.display='inline-block';
+  }else{
+    if(gameData.enemies.length>=6){ sysAlert('最多只能新增 6 種敵人。'); return; }
+    document.getElementById('en-name').value='';
+    document.getElementById('en-attackType').value='gun';
+    document.getElementById('en-hp').value=50;
+    document.getElementById('en-atk').value=10;
+    document.getElementById('en-speed').value=2;
+    del.style.display='none';
+  }
+  document.getElementById('en-file').value='';
+  const em=document.getElementById('enemy-modal'); em.style.zIndex='9600';
+  openModal('enemy-modal');
+}
+function handleEnemyUpload(ev){
+  const f=ev.target.files&&ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{ const im=new Image(); im.onload=()=>detectEnemySheet(im); im.onerror=()=>sysAlert('圖片載入失敗。'); im.src=rd.result; };
+  rd.readAsDataURL(f);
+}
+function detectEnemySheet(img){
+  const removeBg=document.getElementById('en-removebg').checked;
+  const tol=parseInt(document.getElementById('en-tol').value)||40;
+  const res=processSpriteSheet(img, removeBg, tol);
+  if(!res) return;
+  _enemyPending={img:res.img, frames:res.frames, refH:res.refH};
+  // 診斷
+  const el=document.getElementById('en-diagnosis'); el.style.display='block';
+  const okAll=res.detected>=60;
+  el.innerHTML=`<div style="font-weight:bold;margin-bottom:4px">🔍 診斷結果</div>
+    <div>尺寸：${res.W}×${res.H}px　偵測影格：<b>${res.detected}</b>/84　壓縮後約 ${res.sizeKB} KB</div>
+    <div style="margin-top:6px;padding:6px;border-radius:6px;background:${okAll?'#eaf7ee':'#fdeeee'};color:${okAll?'#2b8a3e':'#c92a2a'}">
+      ${okAll?'✅ 版面符合，可儲存。':'⚠️ 影格偏少，可能版面不符（需 6 列×14 欄）。仍可儲存試看，或改用內建外觀。'}</div>`;
+  // 預覽
+  const wrap=document.getElementById('en-preview-wrap'); wrap.style.display='block';
+  const pc=document.getElementById('en-preview');
+  const cols=8, cellW=90, cellH=90;
+  pc.width=cols*cellW; pc.height=6*cellH;
+  const g=pc.getContext('2d'); g.fillStyle='#1b2430'; g.fillRect(0,0,pc.width,pc.height); g.imageSmoothingEnabled=true;
+  for(let r=0;r<6;r++){ g.fillStyle='rgba(255,255,255,.5)'; g.font='10px sans-serif'; g.fillText(CHAR_ROW_LABELS[r],4,r*cellH+12);
+    let shown=0;
+    for(let c=0;c<14&&shown<cols;c++){ const f=res.previewFrames[r][c]; if(!f)continue;
+      const sx=f[0],sy=f[1],sw=f[2],sh=f[3]; const sc=Math.min((cellW-10)/sw,(cellH-24)/sh);
+      const dw=sw*sc,dh=sh*sc; g.drawImage(res.previewCanvas,sx,sy,sw,sh,shown*cellW+(cellW-dw)/2,r*cellH+16+(cellH-16-dh),dw,dh); shown++; }
+  }
+}
+function saveEnemy(){
+  ensureEnemies();
+  const name=document.getElementById('en-name').value.trim()||('敵人'+(gameData.enemies.length+1));
+  const attackType=document.getElementById('en-attackType').value;
+  const hp=Math.max(1,parseInt(document.getElementById('en-hp').value)||50);
+  const atk=Math.max(1,parseInt(document.getElementById('en-atk').value)||10);
+  const speed=Math.max(0.5,parseFloat(document.getElementById('en-speed').value)||2);
+  if(_editingEnemyId){
+    const e=gameData.enemies.find(x=>x.id===_editingEnemyId);
+    e.name=name; e.attackType=attackType; e.hp=hp; e.atk=atk; e.speed=speed;
+    if(_enemyPending){ e.img=_enemyPending.img; e.frames=_enemyPending.frames; e.refH=_enemyPending.refH; }
+  }else{
+    const e={id:'en_'+Date.now().toString(36), name, attackType, hp, atk, speed};
+    if(_enemyPending){ e.img=_enemyPending.img; e.frames=_enemyPending.frames; e.refH=_enemyPending.refH; }
+    gameData.enemies.push(e);
+  }
+  autoSave(); renderEnemyList(); closeModal('enemy-modal'); openModal('global-modal');
+}
+function deleteEnemy(){
+  if(!_editingEnemyId){ closeModal('enemy-modal'); openModal('global-modal'); return; }
+  sysConfirm('確定刪除此敵人類別？各房間中此敵人的設定也會一併移除。',()=>{
+    gameData.enemies=(gameData.enemies||[]).filter(e=>e.id!==_editingEnemyId);
+    // 清除各房間對此敵人的 spawn 設定
+    Object.values(gameData.rooms||{}).forEach(r=>{ if(r.enemySpawns) r.enemySpawns=r.enemySpawns.filter(s=>s.typeId!==_editingEnemyId); });
+    autoSave(); renderEnemyList(); closeModal('enemy-modal'); openModal('global-modal');
+  });
+}
+function renderEnemyList(){
+  const box=document.getElementById('g-enemy-list'); if(!box)return;
+  ensureEnemies();
+  if(!gameData.enemies.length){ box.innerHTML='<div style="color:#999;font-size:.82em">尚未新增任何自訂敵人。點下方按鈕新增。</div>'; return; }
+  box.innerHTML='';
+  gameData.enemies.forEach(e=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;background:#f7f9fc;border:1px solid #dde5ee;border-radius:8px;padding:6px 10px';
+    const cvid='en-thumb-'+e.id;
+    row.innerHTML=`<canvas id="${cvid}" width="44" height="44" style="width:44px;height:44px;background:#1b2430;border-radius:6px"></canvas>
+      <div style="flex:1">
+        <div style="font-weight:bold">${e.name} <span style="font-size:.75em;color:${e.attackType==='gun'?'#0369a1':'#9a3030'}">${e.attackType==='gun'?'🔫 槍械':'👊 近身'}</span></div>
+        <div style="font-size:.72em;color:#777">HP ${e.hp} · 攻擊 ${e.atk} · 速度 ${e.speed} · ${e.img?'自訂圖':'內建機器人'}</div>
+      </div>
+      <button class="tbtn" style="padding:5px 12px" onclick="openEnemyModal('${e.id}')">編輯</button>`;
+    box.appendChild(row);
+    // 縮圖
+    setTimeout(()=>renderEnemyThumb(cvid, e),0);
+  });
+}
+const _enemyThumbImgs={};
+function renderEnemyThumb(canvasId, e){
+  const cv=document.getElementById(canvasId); if(!cv)return;
+  const g=cv.getContext('2d'); g.clearRect(0,0,cv.width,cv.height); g.imageSmoothingEnabled=true;
+  const drawFrom=(img,f)=>{ if(!img||!img.complete||!img.naturalWidth)return;
+    const [sx,sy,sw,sh]=f; const pad=3,sc=Math.min((cv.width-pad*2)/sw,(cv.height-pad*2)/sh);
+    const dw=sw*sc,dh=sh*sc; g.drawImage(img,sx,sy,sw,sh,(cv.width-dw)/2,cv.height-pad-dh,dw,dh); };
+  if(e.img&&e.frames&&e.frames[0]&&e.frames[0][0]){
+    if(!_enemyThumbImgs[e.id]||_enemyThumbImgs[e.id]._src!==e.img){
+      const im=new Image(); im._src=e.img; im.onload=()=>renderEnemyThumb(canvasId,e); _enemyThumbImgs[e.id]=im; im.src=e.img; }
+    drawFrom(_enemyThumbImgs[e.id], e.frames[0][0]);
+  }else{
+    // 內建機器人縮圖
+    const im=previewSprites.enemy, f=PREVIEW_FRAME.enemy;
+    if(im&&f) drawFrom(im,[f.sx,f.sy,f.sw,f.sh]);
+    else { g.fillStyle='#7a3030'; g.fillRect(cv.width/2-9,cv.height-26,18,22); }
+  }
+}
+
+/* 每房間的自訂敵人生成設定 */
+function renderRoomEnemySpawns(r){
+  const box=document.getElementById('r-enemy-spawns'); if(!box)return;
+  const enemies=Array.isArray(gameData.enemies)?gameData.enemies:[];
+  if(!enemies.length){ box.innerHTML='<div style="color:#999;font-size:.8em">（尚無自訂敵人。可到「全域設定 → 自訂敵人」新增。）</div>'; return; }
+  if(!Array.isArray(r.enemySpawns)) r.enemySpawns=[];
+  box.innerHTML='<div style="font-weight:bold;font-size:.85em;color:#9a3030;margin-bottom:2px">自訂敵人（本房間）</div>';
+  enemies.forEach(e=>{
+    const sp=r.enemySpawns.find(s=>s.typeId===e.id)||{count:0,hp:e.hp,atk:e.atk,speed:e.speed};
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff6f6;border:1px solid #ecc; border-radius:8px;padding:6px 10px';
+    row.innerHTML=`<div style="flex:1;min-width:120px;font-weight:bold">${e.name}
+        <span style="font-size:.72em;color:${e.attackType==='gun'?'#0369a1':'#9a3030'}">${e.attackType==='gun'?'🔫':'👊'}</span></div>
+      <label style="font-size:.72em">數量<input type="number" min="0" max="12" value="${sp.count||0}" data-en="${e.id}" data-k="count" class="es-in form-control" style="width:56px;padding:4px"></label>
+      <label style="font-size:.72em">HP<input type="number" min="1" value="${sp.hp||e.hp}" data-en="${e.id}" data-k="hp" class="es-in form-control" style="width:60px;padding:4px"></label>
+      <label style="font-size:.72em">攻擊<input type="number" min="1" value="${sp.atk||e.atk}" data-en="${e.id}" data-k="atk" class="es-in form-control" style="width:56px;padding:4px"></label>
+      <label style="font-size:.72em">速度<input type="number" min="0.5" step="0.5" value="${sp.speed||e.speed}" data-en="${e.id}" data-k="speed" class="es-in form-control" style="width:56px;padding:4px"></label>`;
+    box.appendChild(row);
+  });
+}
+function saveRoomEnemySpawns(r){
+  const enemies=Array.isArray(gameData.enemies)?gameData.enemies:[];
+  if(!enemies.length){ return; }
+  const map={};
+  document.querySelectorAll('#r-enemy-spawns .es-in').forEach(inp=>{
+    const id=inp.dataset.en, k=inp.dataset.k;
+    map[id]=map[id]||{typeId:id};
+    map[id][k]=(k==='speed')?parseFloat(inp.value)||0:parseInt(inp.value)||0;
+  });
+  r.enemySpawns=Object.values(map).filter(s=>(s.count||0)>0);
+}
+
 function openGlobalSettings(){
   document.getElementById('g-startBg').value=gameData.startBgImg||'';
   updateSinglePreview(document.getElementById('g-startBg'),'prev-g-startBg');
   document.getElementById('g-subtitle').value=gameData.startSubtitle||'';
   updateCharStatus();
+  renderEnemyList();
   document.getElementById('g-designer').value=gameData.designer||'';
   document.getElementById('g-passcode').value=gameData.passcode||'';
   document.getElementById('g-theme').value=gameData.themeColor||'default';
@@ -2380,18 +2638,6 @@ function importTXT(ev){
   rd.readAsText(f);
 }
 
-/* ================= 內建示範專案 ================= */
-const DEMO_PROJECT={"gameName": "實驗設施保衛戰（示範）", "startBgImg": "", "startSubtitle": "一場結合國中理化的動作冒險", "designer": "侯老師", "blindSearch": false, "passcode": "", "forceLogExport": false, "themeColor": "blue", "popupStyle": "neon", "bgmVolume": 70, "sfxVolume": 80, "customTabEnabled": false, "customTabName": "", "customTabUrl": "", "customTabDesc": "", "backpackEnabled": false, "timeLimitEnabled": true, "timeLimitSeconds": 300, "weapon": "blaster", "weaponDmg": 20, "weaponCd": 14, "playerHp": 100, "lives": 3, "playerSpeed": 4, "lang": "zh", "items": [], "rooms": {"room_1": {"id": "room_1", "name": "起始大廳", "tall": false, "bg": "#25303a", "floor": "#33454f", "accent": "#3a6a8a", "bgmUrl": "", "isStart": true, "isEnd": false, "endCondition": "arrive", "preludeStory": "警報響起，實驗設施被入侵。\n你是唯一還能行動的守衛。\n沿著房間探索，操作實驗機台強化裝備，擊退所有機器人。", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_1", "src": "builtin", "prop": "lab_00", "collide": true, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_2", "src": "builtin", "prop": "lab_59", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_3", "src": "builtin", "prop": "lab_65", "collide": true, "x": 950, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_4", "src": "builtin", "prop": "lab_60", "collide": false, "x": 1250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_5", "src": "builtin", "prop": "lab_58", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_10453", "src": "pickup", "pickupType": "heal", "collide": false, "x": 700, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_12279", "src": "pickup", "pickupType": "star", "collide": false, "x": 1000, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_82135", "src": "pickup", "pickupType": "mine", "collide": false, "x": 850, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_1", "type": "info", "title": "調查筆記", "x": 480, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "這棟建築的地下藏著實驗機台。\n操作它們可以強化你的武器與身體。\n往右邊的門可前往實驗室。", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_2", "type": "portal", "title": "往實驗室", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_2", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 50, "enemyAtk": 8, "uiX": 60, "uiY": 80, "wallpaper": "grid", "wallpaperColor": "#2f4a5a", "floorThickness": 16}, "room_2": {"id": "room_2", "name": "地下實驗室", "tall": false, "bg": "#2a2a30", "floor": "#3a3a44", "accent": "#6a5a2a", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_6", "src": "builtin", "prop": "lab_42", "collide": true, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_7", "src": "builtin", "prop": "lab_35", "collide": true, "x": 1050, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_8", "src": "builtin", "prop": "lab_90", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_9", "src": "builtin", "prop": "lab_92", "collide": true, "x": 420, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_10", "src": "builtin", "prop": "lab_113", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_11", "src": "builtin", "prop": "lab_117", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_69178", "src": "pickup", "pickupType": "ammo", "collide": false, "x": 650, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_8130", "src": "pickup", "pickupType": "spike", "collide": false, "x": 1200, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_hz_41409", "src": "pickup", "pickupType": "flame", "collide": false, "x": 780, "y": 430, "scale": 1, "floor": 0, "val": 12}, {"id": "obj_hz_91380", "src": "pickup", "pickupType": "laser", "collide": false, "x": 480, "y": 430, "scale": 1, "floor": 0, "val": 15}], "triggers": [{"id": "trg_demo_3", "type": "machine", "title": "光學校準儀", "x": 500, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_4", "type": "machine", "title": "歐姆定律儀", "x": 1050, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "ohms", "machineMax": 2}, {"id": "trg_demo_5", "type": "check", "title": "門禁密碼", "x": 780, "y": 410, "floor": 0, "radius": 70, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "實驗室安全守則第一條的關鍵字是什麼？（提示：穿戴？）", "answerType": "contains_any", "answer": "護目鏡,防護,手套", "score": 5, "hints": [{"type": "time", "time": 10, "reqItemId": "", "text": "想想進實驗室前，眼睛要戴什麼保護？", "media": []}], "feedbackMedia": [], "feedbackText": "密碼正確，通往頂樓的電梯已解鎖。", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_6", "type": "portal", "title": "往頂樓(需解密碼)", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": ["hs:trg_demo_5"], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_3", "transition": "fadeBlack", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 3, "enemyHp": 60, "enemyAtk": 10, "uiX": 320, "uiY": 80, "wallpaper": "circuit", "wallpaperColor": "#5a5030", "floorThickness": 16}, "room_3": {"id": "room_3", "name": "頂樓平台", "tall": true, "bg": "#1f2a3a", "floor": "#2f3f5a", "accent": "#4a7aaa", "bgmUrl": "", "isStart": false, "isEnd": false, "endCondition": "arrive", "preludeStory": "", "preludeMedia": [], "endStory": "", "endMedia": [], "objects": [{"id": "obj_demo_12", "src": "builtin", "prop": "lab_66", "collide": true, "x": 300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_13", "src": "builtin", "prop": "lab_130", "collide": true, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_14", "src": "builtin", "prop": "lab_06", "collide": true, "x": 700, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_demo_15", "src": "builtin", "prop": "lab_101", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_pk_3845", "src": "pickup", "pickupType": "shield", "collide": false, "x": 1050, "y": 820, "scale": 1, "floor": 1}, {"id": "obj_pk_43500", "src": "pickup", "pickupType": "timeplus", "collide": false, "x": 450, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_63891", "src": "pickup", "pickupType": "alarm", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}], "triggers": [{"id": "trg_demo_7", "type": "interact", "title": "神秘終端機", "x": 700, "y": 820, "floor": 1, "radius": 75, "requires": [], "media": [], "text": "終端機閃著光。要嘗試駭入嗎？", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [{"text": "注入能量（+30 能量）", "effectType": "stats", "effectValue": "energy:30", "feedbackText": "能量湧入身體！"}, {"text": "下載作戰資料（線索）", "effectType": "clue", "effectValue": "", "feedbackText": "BOSS 的弱點是頭部核心，用蓄力光束攻擊最有效。"}], "machineId": "optics", "machineMax": 2}, {"id": "trg_demo_8", "type": "machine", "title": "凸透鏡成像儀", "x": 300, "y": 410, "floor": 0, "radius": 75, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "", "transition": "none", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "lens", "machineMax": 2}, {"id": "trg_demo_9", "type": "portal", "title": "前往決戰區", "x": 1500, "y": 410, "floor": 0, "radius": 80, "requires": [], "media": [], "text": "", "link": "", "url": "", "targetRoomId": "room_4", "transition": "zoom", "question": "", "answerType": "exact", "answer": "", "score": 1, "hints": [], "feedbackMedia": [], "feedbackText": "", "jumpToEnding": false, "rewardItemId": "", "options": [], "machineId": "optics", "machineMax": 2}], "enemyCount": 2, "enemyHp": 70, "enemyAtk": 12, "uiX": 580, "uiY": 80, "wallpaper": "hex", "wallpaperColor": "#3a5a6a", "floorThickness": 16}, "room_4": {"id": "room_4", "name": "決戰區", "tall": false, "bg": "#302027", "floor": "#4a2f3a", "accent": "#aa3a6a", "bgmUrl": "", "isStart": false, "isEnd": true, "endCondition": "clear", "preludeStory": "最後的機器人守衛擋在出口。\n清除牠們就能重奪設施控制權！", "preludeMedia": [], "endStory": "警報解除。\n設施重新回到你手中。\n你運用實驗機台強化裝備、擊退了所有入侵者——\n物理與化學的知識，就是你最強的武器。\n\n🎉 任務完成！", "endMedia": [], "objects": [{"id": "obj_demo_16", "src": "builtin", "prop": "lab_71", "collide": true, "x": 250, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_17", "src": "builtin", "prop": "lab_121", "collide": true, "x": 1300, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_demo_18", "src": "builtin", "prop": "lab_120", "collide": true, "x": 1150, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_38589", "src": "pickup", "pickupType": "heal", "collide": false, "x": 500, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_pk_4365", "src": "pickup", "pickupType": "energymax", "collide": false, "x": 900, "y": 430, "scale": 1, "floor": 0}, {"id": "obj_hz_26767", "src": "pickup", "pickupType": "cannon", "collide": false, "x": 1450, "y": 430, "scale": 1, "floor": 0, "val": 25}], "triggers": [], "enemyCount": 4, "enemyHp": 80, "enemyAtk": 14, "uiX": 840, "uiY": 80, "wallpaper": "brick", "wallpaperColor": "#5a3040", "floorThickness": 16}}};
-function loadDemo(){
-  sysConfirm('載入示範專案「實驗設施保衛戰」？\n這會覆蓋目前的編輯內容（若尚未匯出請先匯出專案）。',()=>{
-    gameData=JSON.parse(JSON.stringify(DEMO_PROJECT));
-    if(!gameData.rooms)gameData.rooms={};
-    document.getElementById('game-name').value=gameData.gameName||'';
-    autoSave(); renderRoomList();
-    const ks=Object.keys(gameData.rooms); if(ks.length) selectRoom(ks[0]); updateAllCharThumbs();
-    sysAlert('✅ 示範專案已載入！\n共 4 個房間，含資訊/檢驗/互動/穿越/機台觸發點、樓中樓與清敵結局。\n按上方「▶️ 試玩」即可遊玩。');
-  });
-}
 
 /* ================= 初始化 ================= */
 async function loadProps(){
@@ -2411,7 +2657,7 @@ window.addEventListener('load',()=>{
   setTimeout(()=>{const s=document.getElementById('splash-screen');s.style.opacity='0';
     setTimeout(()=>s.style.display='none',800);},1200);
   const hadSave=autoLoad();
-  if(!hadSave){ gameData=JSON.parse(JSON.stringify(DEMO_PROJECT)); }
+  if(!hadSave){ gameData=newGameData(); }
   document.getElementById('game-name').value=gameData.gameName||'';
   document.getElementById('game-name').oninput=e=>{gameData.gameName=e.target.value;autoSave();};
   setObjSource('builtin'); setMode('select');
@@ -2464,6 +2710,20 @@ const SOLDIER_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},
 const ROBOT_ANIM={idle:{row:0,start:0,frames:9,speed:9,loop:true},walk:{row:1,start:0,frames:12,speed:5,loop:true,step:true},
   run:{row:2,start:0,frames:8,speed:4,loop:true,step:true},attack:{row:3,start:0,frames:6,speed:3,loop:false,hitFrame:3},
   hurt:{row:5,start:0,frames:4,speed:6,loop:false},defeated:{row:5,start:8,frames:4,speed:8,loop:false}};
+// 自訂敵人動畫（版面同主角 6 列×14 欄）：走路、攻擊(射擊列)、受傷/倒下
+const CUSTOM_ENEMY_ANIM={idle:{row:0,start:0,frames:10,speed:9,loop:true},
+  walk:{row:1,start:0,frames:14,speed:5,loop:true,step:true},
+  run:{row:2,start:0,frames:6,speed:4,loop:true,step:true},
+  attack:{row:3,start:3,frames:8,speed:2,loop:false,hitFrame:4,fireFrame:4},
+  hurt:{row:5,start:0,frames:5,speed:6,loop:false},defeated:{row:5,start:5,frames:9,speed:7,loop:false}};
+// 建立各自訂敵人的精靈圖表
+const ENEMY_SHEETS={};
+if(Array.isArray(P.enemies)){
+  P.enemies.forEach(e=>{
+    if(e.img&&e.frames){ ENEMY_SHEETS[e.id]=new Sheet(e.img,{centers:[],rowTops:[],rowH:e.refH,cellW:0,frames:e.frames,refH:e.refH}); }
+  });
+}
+function enemyTypeById(id){ return (P.enemies||[]).find(e=>e.id===id); }
 function afc(a){return a.frames;} function acol(a,f){return a.start+f;}
 
 /* ---- 物件圖 ---- */
@@ -2666,21 +2926,45 @@ function spawnProj(owner,dmg,big){
 
 /* ---- 敵人 ---- */
 class Enemy extends Entity{
-  constructor(x,floorOffset,hp,atk){super(x,ROBOT,ROBOT_ANIM);
+  constructor(x,floorOffset,hp,atk,opts){
+    opts=opts||{};
+    const sheet=opts.sheet||ROBOT;
+    const anim=opts.anim||ROBOT_ANIM;
+    super(x,sheet,anim);
     this.floorOffset=floorOffset;this.maxHp=hp;this.hp=hp;this.atk=atk;
-    this.z=0;this.attackCd=0;this.state='idle';}
+    this.z=0;this.attackCd=0;this.state='idle';
+    this.attackType=opts.attackType||'melee';   // 'gun' | 'melee'
+    this.speed=opts.speed||1.6;
+    this.range=this.attackType==='gun'?360:70;   // 槍械遠攻範圍較大
+  }
   update(pl){
     if(this.isDead){this.advance();return;}
     if(this.floorOffset!==pl.floorOffset){this.setAnim('idle');this.advance();return;}
     const dist=pl.x-this.x; const adist=Math.abs(dist);
     this.dir=dist>=0?1:-1;
     if(this.attackCd>0)this.attackCd--;
-    if(adist>70){this.x+=this.dir*1.6;this.setAnim('walk');}
-    else{
-      this.setAnim('attack');
-      if(this.attackCd<=0&&Math.abs(pl.z-this.z)<60){
-        this.attackCd=70;
-        setTimeout(()=>{if(!this.isDead&&Math.abs(pl.x-this.x)<80&&pl.floorOffset===this.floorOffset)pl.hurt(this.atk,this.dir);},400);
+    if(this.attackType==='gun'){
+      // 槍械：保持中距離，射擊
+      if(adist>this.range){ this.x+=this.dir*this.speed; this.setAnim('walk'); }
+      else if(adist<140){ this.x-=this.dir*this.speed*0.7; this.setAnim('walk'); } // 太近則後退
+      else{
+        this.setAnim('attack');
+        if(this.attackCd<=0){
+          this.attackCd=90;
+          const gy=groundYFor(this)-this.z-CHAR_H*0.55;
+          enemyBullets.push({x:this.x+this.dir*30,y:gy,vx:this.dir*7,dmg:this.atk,floorOffset:this.floorOffset,life:150});
+          SFX.shoot();
+        }
+      }
+    }else{
+      // 近身：貼近打擊
+      if(adist>70){ this.x+=this.dir*this.speed; this.setAnim('walk'); }
+      else{
+        this.setAnim('attack');
+        if(this.attackCd<=0&&Math.abs(pl.z-this.z)<60){
+          this.attackCd=70;
+          setTimeout(()=>{if(!this.isDead&&Math.abs(pl.x-this.x)<80&&pl.floorOffset===this.floorOffset)pl.hurt(this.atk,this.dir);},400);
+        }
       }
     }
     this.z=platformHeight(this.x,this.floorOffset);
@@ -2691,6 +2975,7 @@ class Enemy extends Entity{
     for(let i=0;i<6;i++)particles.push({x:this.x,y:groundYFor(this)-this.z-60,vx:(Math.random()-0.5)*6,vy:-Math.random()*5,life:20,c:'#ffcc44'});
     if(this.hp<=0){this.isDead=true;this.setAnim('defeated');SFX.defeat();score+=10;updateHUD();}}
 }
+let enemyBullets=[];   // 敵人槍械子彈
 </script>
 <script id="raw-runtime-2" type="text/plain">
 /* ---- 房間載入 ---- */
@@ -2729,15 +3014,29 @@ function handleStairs(pl){
 function loadRoom(id,fromDir){
   curRoom=P.rooms[id]; window.__curRoomId=id;
   if(!visited.includes(id))visited.push(id);
-  enemies=[];projectiles=[];particles=[];hazardProj=[];
+  enemies=[];projectiles=[];particles=[];hazardProj=[];enemyBullets=[];
   // 重置砲台計時器
   (curRoom.objects||[]).forEach(o=>{if(o.src==='pickup'){o._t=undefined;o._hitCd=0;o._warn=false;o._fire=false;}});
-  // 生成敵人（避開右側樓梯與出入口）
+  // 生成內建機器人敵人（避開右側樓梯與出入口）
   const n=curRoom.enemyCount||0;
   for(let i=0;i<n;i++){
     const x=200+Math.random()*(ROOM_W-500);
     const fo=(curRoom.tall&&Math.random()<0.35)?UPPER_RISE:0;
     enemies.push(new Enemy(x,fo,curRoom.enemyHp||60,curRoom.enemyAtk||10));
+  }
+  // 生成自訂敵人
+  if(Array.isArray(curRoom.enemySpawns)){
+    curRoom.enemySpawns.forEach(sp=>{
+      const type=enemyTypeById(sp.typeId); if(!type)return;
+      const cnt=Math.min(12,sp.count||0);
+      const sheet=ENEMY_SHEETS[sp.typeId]||null;
+      for(let i=0;i<cnt;i++){
+        const x=200+Math.random()*(ROOM_W-500);
+        const fo=(curRoom.tall&&Math.random()<0.35)?UPPER_RISE:0;
+        enemies.push(new Enemy(x,fo, sp.hp||type.hp||50, sp.atk||type.atk||10,
+          {sheet:sheet, anim:sheet?CUSTOM_ENEMY_ANIM:ROBOT_ANIM, attackType:type.attackType||'melee', speed:sp.speed||type.speed||2}));
+      }
+    });
   }
   if(!player){player=new Player(120);}
   else{ // 依來向決定進入位置
@@ -3246,6 +3545,17 @@ function loop(){
       enemies.forEach(e=>{ if(e.isDead||e.floorOffset!==p.floorOffset)return;
         if(Math.abs(e.x-p.x)<40&&Math.abs((e.z+60)-p.z)<70){e.hurt(p.dmg,Math.sign(p.vx));p.life=0;} }); });
     projectiles=projectiles.filter(p=>p.life>0&&p.x>-50&&p.x<ROOM_W+50);
+    // 敵人槍械子彈
+    enemyBullets.forEach(b=>{ b.x+=b.vx; b.life--;
+      if(player.floorOffset===b.floorOffset){
+        const py=(FLOOR_BOT-b.floorOffset)-player.z-CHAR_H*0.5;
+        if(Math.abs(player.x-b.x)<26&&Math.abs(py-b.y)<CHAR_H*0.55){
+          player.hurt(b.dmg,Math.sign(b.vx)); b.life=0;
+          for(let i=0;i<6;i++)particles.push({x:b.x,y:b.y,vx:(Math.random()-0.5)*5,vy:-Math.random()*4,life:16,c:'#ff7a3d'});
+        }
+      }
+    });
+    enemyBullets=enemyBullets.filter(b=>b.life>0&&b.x>-40&&b.x<ROOM_W+40);
     particles.forEach(pt=>{pt.x+=pt.vx;pt.y+=pt.vy;if(!pt.txt)pt.vy+=0.4;pt.life--;});
     particles=particles.filter(pt=>pt.life>0);
     checkPickups();
@@ -3412,6 +3722,12 @@ function render(){
   projectiles.forEach(p=>{const sx=p.x-camera.x,sy=(FLOOR_BOT-p.floorOffset)-p.z-camera.y;
     ctx.fillStyle=p.big?'#7fdcff':'#ffe066';ctx.beginPath();ctx.arc(sx,sy,p.big?9:5,0,Math.PI*2);ctx.fill();
     ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;});
+  // 敵人子彈（橘紅）
+  enemyBullets.forEach(b=>{ if(player&&b.floorOffset!==player.floorOffset)return;
+    const sx=b.x-camera.x, sy=b.y-camera.y;
+    ctx.fillStyle='#ff7a3d'; ctx.shadowColor='#ff5a2d'; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.arc(sx,sy,5,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(sx-Math.sign(b.vx)*3,sy,2,0,Math.PI*2); ctx.fill(); });
   particles.forEach(pt=>{ctx.globalAlpha=Math.min(1,pt.life/20);
     if(pt.txt){ ctx.fillStyle=pt.c; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
       ctx.fillText(pt.txt, pt.x-camera.x, pt.y-camera.y); ctx.textAlign='left'; }

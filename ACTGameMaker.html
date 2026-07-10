@@ -2501,12 +2501,41 @@ function diagnoseMachineHTML(html){
   el.innerHTML=`<div style="font-weight:bold;margin-bottom:6px">🔍 傳值規範診斷（約 ${sizeKB} KB）</div>`+
     checks.map(c=>`<div style="display:flex;gap:6px;padding:2px 0;color:${c.ok?'#2b8a3e':'#c92a2a'}">
       <span>${c.ok?'✅':'❌'}</span><span>${c.label}${c.ok?'':'<br><span style="color:#a05a5a;font-size:.92em">→ '+c.fix+'</span>'}</span></div>`).join('')+
+    `<div id="mc-height-check" style="padding:2px 0;color:#888">⏳ 正在量測機台顯示高度…</div>`+
     `<div style="margin-top:8px;padding:8px;border-radius:6px;background:${passCore?'#d7f0de':'#f7d7d7'};color:${passCore?'#217a3e':'#a02020'};font-weight:bold">
       ${passCore?'✅ 符合傳值規範，可儲存並在遊戲中使用。':'❌ 尚未符合規範。請依上方說明修正 HTML 後重新上傳。'}</div>
     ${!passCore?`<div style="margin-top:6px;font-size:.92em;color:#777">最小範例：在通關的地方加入<br>
       <code style="background:#eee;padding:2px 4px">window.parent.postMessage({type:'attackUpgrade',amount:1},'*');</code></div>`:''}`;
   _machinePending={html, sizeKB, valid:passCore};
   document.getElementById('mc-test-btn').style.display='inline-block';
+  measureMachineHeight(html);
+}
+// 用隱藏 iframe 量測機台渲染高度，超過遊戲視窗則警示
+function measureMachineHeight(html){
+  const GAME_VIEW_H=600;   // 典型遊戲視窗高度參考
+  const probe=document.createElement('iframe');
+  probe.style.cssText='position:fixed;left:-9999px;top:0;width:1000px;height:200px;border:0;visibility:hidden';
+  document.body.appendChild(probe);
+  probe.srcdoc=html;
+  const done=(h)=>{
+    const el=document.getElementById('mc-height-check'); if(!el){ probe.remove(); return; }
+    if(!h){ el.style.color='#888'; el.textContent='ℹ️ 無法量測高度（可能含跨網域內容），遊戲中若過長可捲動查看。'; probe.remove(); return; }
+    if(h>GAME_VIEW_H){
+      el.style.color='#b8860b';
+      el.innerHTML=`⚠️ 機台高度約 ${h}px，<b>超過遊戲視窗（約 ${GAME_VIEW_H}px）</b>，遊戲中玩家需<b>捲動右側捲軸</b>才能看完。建議：讓內容更精簡、避免固定 100vh、或改為可捲動的緊湊版面。（仍可使用）`;
+      if(_machinePending){ _machinePending.tall=true; _machinePending.height=h; }
+    }else{
+      el.style.color='#2b8a3e';
+      el.textContent=`✅ 機台高度約 ${h}px，可在遊戲視窗內完整顯示。`;
+      if(_machinePending) _machinePending.height=h;
+    }
+    probe.remove();
+  };
+  probe.onload=()=>{ try{ const d=probe.contentWindow.document;
+    const measure=()=>{ const hh=Math.max(d.body?d.body.scrollHeight:0, d.documentElement?d.documentElement.scrollHeight:0); return hh; };
+    setTimeout(()=>done(measure()),350);
+  }catch(e){ done(0); } };
+  setTimeout(()=>{ if(document.body.contains(probe)) { try{done(Math.max(probe.contentWindow.document.body.scrollHeight,0));}catch(e){done(0);} } },1500);
 }
 function testMachinePreview(){
   if(!_machinePending||!_machinePending.html){ return; }
@@ -3654,8 +3683,18 @@ function openMachine(t){
   if(m&&m.custom){ fr.removeAttribute('src'); fr.srcdoc=m.html; }
   else { fr.removeAttribute('srcdoc'); fr.src=m?m.src:''; }
   ov.style.display='flex';
+  ov.scrollTop=0;
   const maxS=t.machineMax||2;
-  fr.onload=()=>{ try{fr.contentWindow.postMessage({type:'machineState',successCount:machineSuccess[t.id]||0,maxSuccess:maxS},'*');}catch(e){} };
+  fr.onload=()=>{
+    try{fr.contentWindow.postMessage({type:'machineState',successCount:machineSuccess[t.id]||0,maxSuccess:maxS},'*');}catch(e){}
+    // 依內容高度調整 iframe，讓超過視窗的機台可由外層捲動看完
+    try{
+      const doc=fr.contentWindow.document;
+      const fit=()=>{ const hh=Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+        if(hh>0) fr.style.height=hh+'px'; };
+      fit(); setTimeout(fit,300); setTimeout(fit,900);
+    }catch(e){ /* 跨網域無法讀取則維持預設，iframe 自身可捲動 */ }
+  };
   currentTrigger=t;
 }
 function closeMachine(){
@@ -4549,9 +4588,9 @@ function buildGameHTML(isPreview){
 .btn-cancel{background:#6c757d}
 .opt-btn{display:block;width:100%;background:var(--bg);color:var(--text);border:2px solid var(--primary);padding:11px;border-radius:8px;font-weight:bold;cursor:pointer;text-align:left;margin-bottom:8px;text-decoration:none}
 .opt-btn:hover{background:var(--primary);color:#fff}
-#machine-ov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;display:none;flex-direction:column;padding:20px}
-#machine-bar{background:var(--primary);color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:10px 10px 0 0}
-#machine-frame{flex:1;width:100%;border:none;background:#0b1120;border-radius:0 0 10px 10px}
+#machine-ov{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;display:none;flex-direction:column;padding:20px;overflow-y:auto}
+#machine-bar{background:var(--primary);color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:10px 10px 0 0;flex-shrink:0;position:sticky;top:0;z-index:2}
+#machine-frame{width:100%;min-height:520px;border:none;background:#0b1120;border-radius:0 0 10px 10px;flex-shrink:0}
 #bp-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:var(--primary);color:#fff;font-size:28px;display:none;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4);border:3px solid #fff;cursor:pointer;z-index:900}
 #ctab-btn{position:fixed;bottom:20px;right:90px;width:60px;height:60px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.4);border:3px solid #fff;cursor:pointer;z-index:900}
 #ctab-frame{width:100%;height:66vh;border:none;border-radius:8px;background:#fff}

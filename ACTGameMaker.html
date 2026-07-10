@@ -930,6 +930,31 @@ function newGameData(){
     lang:"zh", items:[], enemies:[], customMachines:[], rooms:{}
   };
 }
+// 無 localStorage 時的起始專案：1 房間 + 1 預設敵人 + 1 物件（主角用內建預設）
+function makeStarterProject(){
+  const g=newGameData();
+  g.gameName='我的新遊戲';
+  const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+  const propKeys=(typeof PROP_SCALES!=='undefined')?Object.keys(PROP_SCALES):['lab_00'];
+  const prop=pick(propKeys);
+  // 一個預設敵人（內建機器人外觀，隨機遠攻或近身）
+  g.enemies=[{id:'en_start', name:'巡邏機兵', attackType:pick(['gun','melee']), hp:50, atk:10, speed:2, scale:1, bulletStyle:'laser', bulletSize:1}];
+  const id='room_'+Date.now();
+  g.rooms[id]={
+    id, name:'起始房間',
+    tall:false, bg:'#26202a', floor:pick(['#3f3348','#2f3a4a','#3a2f28','#2f3f38']), accent:pick(['#8a5aaa','#5a8aaa','#aa8a5a','#5aaa7a']), bgmUrl:'',
+    floorThickness:14, wallpaper:pick(['grid','dots','plain','circuit']), wallpaperColor:'#33384a',
+    wallImg:'', wallImgUpper:'',
+    isStart:true, isEnd:false, endCondition:'arrive',
+    preludeStory:'', preludeMedia:[], endStory:'', endMedia:[],
+    objects:[ {id:'obj_start', src:'builtin', prop:prop, x:1050, y:430, scale:1, floor:0, collide:true} ],
+    triggers:[],
+    enemyCount:1, enemyHp:60, enemyAtk:10,
+    enemySpawns:[{typeId:'en_start', count:1, hp:50, atk:10, speed:2}],
+    uiX:80, uiY:80
+  };
+  return g;
+}
 let currentRoomId=null, activeView='room', editMode='select', objSource='builtin';
 let selectedProp=null, selectedPickup=null, addTrgPending=false;
 let selectedObj=null, draggingObj=null, draggingTrg=null, draggedNode=null, resizingObj=null;
@@ -2251,22 +2276,40 @@ function processSpriteSheet(img, removeBg, tol){
   const frames=[]; let refH=0, detected=0, empty=0;
   for(let r=0;r<NROWS;r++){
     const y0=Math.floor(r*rowH), y1=Math.floor((r+1)*rowH);
+    // 該列每個 x 的垂直密度（>60 alpha 的像素數）
+    const colDen=new Int32Array(W);
+    for(let x=0;x<W;x++){ let dcount=0; for(let y=y0;y<y1;y++){ if(al[y*W+x]>60)dcount++; } colDen[x]=dcount; }
     const rowFrames=[];
     for(let c=0;c<NCOLS;c++){
-      const cx0=Math.floor(c*colW), cx1=Math.floor((c+1)*colW);
+      const slotC=(c+0.5)*colW;
+      // 搜尋窗口：以格中心為主，允許 ±0.95 格（涵蓋漂移與往右延伸的子彈/光束）
+      const lo=Math.max(0,Math.floor(slotC-colW*0.95)), hi=Math.min(W,Math.ceil(slotC+colW*0.95));
+      // 找出窗口內的密度區段
       let runs=[], ins=false, s=0;
-      for(let x=cx0;x<cx1;x++){
-        let den=0; for(let y=y0;y<y1;y++){ if(al[y*W+x]>60){den++; if(den>=3)break;} }
-        if(den>=3){ if(!ins){ins=true;s=x;} } else { if(ins){ins=false;runs.push([s,x]);} }
+      for(let x=lo;x<hi;x++){
+        if(colDen[x]>=2){ if(!ins){ins=true;s=x;} } else { if(ins){ins=false;runs.push([s,x]);} }
       }
-      if(ins)runs.push([s,cx1]);
+      if(ins)runs.push([s,hi]);
       if(!runs.length){ rowFrames.push(null); empty++; continue; }
-      const cc=(cx0+cx1)/2; let best=null,bs=-1;
-      for(const rn of runs){ const sc=(rn[0]<=cc&&cc<=rn[1]?1000:0)+(rn[1]-rn[0]); if(sc>bs){bs=sc;best=rn;} }
+      // 合併間距小的區段（同一角色的內部縫隙，如腳之間、身體與鳥喙之間）
+      const gapThr=Math.max(8,colW*0.18);
+      const merged=[runs[0].slice()];
+      for(let k=1;k<runs.length;k++){ if(runs[k][0]-merged[merged.length-1][1]<=gapThr) merged[merged.length-1][1]=runs[k][1]; else merged.push(runs[k].slice()); }
+      // 選擇「密度質心最接近格中心」的區段（可正確處理角色在格內漂移的情形）
+      let best=null, bestD=1e9;
+      for(const [a2,b2] of merged){
+        let wsum=0, xsum=0;
+        for(let x=a2;x<b2;x++){ wsum+=colDen[x]; xsum+=x*colDen[x]; }
+        const centroid = wsum>0 ? xsum/wsum : (a2+b2)/2;
+        const dd=Math.abs(centroid-slotC);
+        if(dd<bestD){ bestD=dd; best=[a2,b2]; }
+      }
+      if(!best || bestD>colW*0.65){ rowFrames.push(null); empty++; continue; }
       const xa=best[0], xb=best[1];
+      // 緊縮上下邊界
       let ya=-1,yb=-1;
-      for(let y=y0;y<y1;y++){ let den=0; for(let x=xa;x<xb;x++){ if(al[y*W+x]>60){den++; if(den>=3)break;} }
-        if(den>=3){ if(ya<0)ya=y; yb=y; } }
+      for(let y=y0;y<y1;y++){ let den=0; for(let x=xa;x<xb;x++){ if(al[y*W+x]>60){den++; if(den>=2)break;} }
+        if(den>=2){ if(ya<0)ya=y; yb=y; } }
       if(ya<0){ rowFrames.push(null); empty++; continue; }
       rowFrames.push([xa,ya,xb-xa,yb-ya+1]); detected++;
       if(r===0&&c===0) refH=yb-ya+1;
@@ -3192,7 +3235,7 @@ window.addEventListener('load',()=>{
   setTimeout(()=>{const s=document.getElementById('splash-screen');s.style.opacity='0';
     setTimeout(()=>s.style.display='none',800);},1200);
   const hadSave=autoLoad();
-  if(!hadSave){ gameData=newGameData(); }
+  if(!hadSave){ gameData=makeStarterProject(); }
   document.getElementById('game-name').value=gameData.gameName||'';
   document.getElementById('game-name').oninput=e=>{gameData.gameName=e.target.value;autoSave();};
   setObjSource('builtin'); setMode('select');

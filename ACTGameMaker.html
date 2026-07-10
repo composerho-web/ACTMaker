@@ -780,7 +780,11 @@ body{margin:0;font-family:"Segoe UI","Microsoft JhengHei",sans-serif;background:
       可上傳自己的互動 HTML 機台（例如自製理化模擬）。系統會<b>診斷是否符合傳值規範</b>，並讓你設定成功後給玩家的<b>強化效果</b>（能量、時間、重生、傳送場景等）。通過後即可在觸發點選用，並會一併打包匯出。
     </div>
     <div id="g-machine-list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
-    <button class="btn-act" style="width:auto;margin:8px 0 0;padding:8px 16px;background:#217a3e" onclick="openMachineModal(null)">➕ 新增自訂機台</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn-act" style="width:auto;margin:0;padding:8px 16px;background:#217a3e" onclick="openMachineModal(null)">➕ 新增自訂機台</button>
+      <button class="tbtn" onclick="downloadMachineExample()">📄 下載範例機台 HTML</button>
+      <button class="tbtn" onclick="copyMachinePrompt()">📋 複製 AI 生成提示詞</button>
+    </div>
 
     <h3 class="section-title">⏱️ 限制設定</h3>
     <div class="form-row">
@@ -2545,6 +2549,128 @@ function deleteMachine(){
   });
 }
 const MC_KIND_LABEL={heal:'補充能量',maxhp:'最大生命',timeplus:'增加時間',regen:'生命回復',shield:'護盾',damage:'攻擊傷害',speed:'移動速度',firerate:'射速',defense:'防禦',teleport:'傳送場景'};
+function deleteMachineDirect(id){
+  const m=(gameData.customMachines||[]).find(x=>x.id===id); if(!m)return;
+  sysConfirm('確定刪除機台「'+m.title+'」？使用此機台的觸發點需重新設定。',()=>{
+    gameData.customMachines=(gameData.customMachines||[]).filter(x=>x.id!==id);
+    autoSave(); renderMachineList();
+  });
+}
+const MACHINE_EXAMPLE_HTML=`<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>範例機台：加法挑戰</title>
+<style>
+  body{margin:0;font-family:system-ui,"Microsoft JhengHei",sans-serif;background:linear-gradient(160deg,#1a2740,#0d1420);
+    color:#e6edf3;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px}
+  h1{font-size:1.3em;margin:0}
+  .q{font-size:2em;font-weight:800;letter-spacing:2px}
+  input{font-size:1.4em;padding:8px 14px;width:120px;text-align:center;border-radius:10px;border:2px solid #3a6a8a;background:#0e1620;color:#fff}
+  button{font-size:1.1em;padding:10px 26px;border:none;border-radius:10px;background:#2e8b57;color:#fff;cursor:pointer;font-weight:700}
+  button:hover{background:#3aa568}
+  .msg{min-height:24px;font-weight:700}
+  .ok{color:#4ade80}.bad{color:#f87171}
+  .status{font-size:.85em;color:#9fb3c8}
+</style>
+</head>
+<body>
+  <h1>🔢 加法挑戰機台（範例）</h1>
+  <div class="q" id="q">? + ? = ?</div>
+  <input id="ans" type="number" placeholder="答案" />
+  <button id="go">送出答案</button>
+  <div class="msg" id="msg"></div>
+  <div class="status" id="status">通關次數：0</div>
+
+<script>
+  // ====== 這是遊戲要求的「傳值規範」重點 ======
+  // 當玩家「操作成功 / 通關」時，呼叫下面這行通知遊戲發放獎勵：
+  //   window.parent.postMessage({ type:'attackUpgrade', amount:1 }, '*');
+  // 遊戲會用「設計者在編輯器設定的效果與數值」發獎（此處 kind/amount 可省略）。
+  // 遊戲也會傳入目前狀態：{ type:'machineState', successCount, maxSuccess }
+  // ============================================
+
+  let a, b, successCount = 0, maxSuccess = 2;
+
+  function newQuestion(){
+    a = Math.floor(Math.random()*20)+1;
+    b = Math.floor(Math.random()*20)+1;
+    document.getElementById('q').textContent = a + ' + ' + b + ' = ?';
+    document.getElementById('ans').value = '';
+    document.getElementById('ans').focus();
+  }
+
+  function submit(){
+    const v = parseInt(document.getElementById('ans').value);
+    const msg = document.getElementById('msg');
+    if(v === a + b){
+      msg.textContent = '✅ 答對了！獲得強化！';
+      msg.className = 'msg ok';
+      // >>> 通關：通知遊戲發獎 <<<
+      window.parent.postMessage({ type:'attackUpgrade', amount:1 }, '*');
+      setTimeout(newQuestion, 800);
+    }else{
+      msg.textContent = '❌ 再試一次';
+      msg.className = 'msg bad';
+    }
+  }
+
+  document.getElementById('go').addEventListener('click', submit);
+  document.getElementById('ans').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+
+  // 接收遊戲傳來的狀態（顯示已通關次數 / 上限）
+  window.addEventListener('message', e=>{
+    const d = e.data; if(!d) return;
+    if(d.type === 'machineState'){
+      successCount = d.successCount || 0;
+      maxSuccess = d.maxSuccess || 2;
+      document.getElementById('status').textContent =
+        '通關次數：' + successCount + ' / ' + maxSuccess +
+        (successCount >= maxSuccess ? '（已達上限，可離開）' : '');
+    }
+  });
+
+  newQuestion();
+<\/script>
+</body>
+</html>`;
+function downloadMachineExample(){
+  const blob=new Blob([MACHINE_EXAMPLE_HTML],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download='範例機台_加法挑戰.html'; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+const MACHINE_AI_PROMPT=`請幫我製作一個「單一 HTML 檔」的教育小遊戲機台，將內嵌在一個橫向動作遊戲中作為互動關卡。請嚴格遵守以下技術規範，並把所有 HTML/CSS/JavaScript 都寫在同一個 .html 檔內（不要外部檔案、不要外部連結）。
+
+【我的需求】（請依此設計題目與操作）
+- 學科單元 / 主題：（例如：國中理化「歐姆定律」、數學「分數加減」、英文單字…請自行填寫）
+- 介面 / 玩法需求：（例如：拖動滑桿調整電壓與電阻使電流達到目標值；或選擇題；或配對；或拼圖…）
+- 「操作成功 / 通關」的判定條件：（例如：電流誤差小於 0.1A 並按下確認；或連續答對 3 題…請明確描述）
+
+【技術規範（務必遵守，否則遊戲無法給獎勵）】
+1. 當玩家「操作成功 / 通關」時，必須呼叫：
+   window.parent.postMessage({ type: 'attackUpgrade', amount: 1 }, '*');
+   （這是通知外層遊戲發放獎勵的唯一方式。獎勵的實際效果與數值由遊戲端設定，你不需處理。）
+2. 請監聽外層遊戲傳入的狀態，用來顯示已完成次數：
+   window.addEventListener('message', e => {
+     const d = e.data;
+     if (d && d.type === 'machineState') {
+       // d.successCount = 已成功次數, d.maxSuccess = 可成功次數上限
+     }
+   });
+3. 整個介面要能在 iframe 中自適應顯示（建議 width:100%、置中、深色背景，字體清楚）。
+4. 不要使用 localStorage / sessionStorage（在沙箱 iframe 中可能失效），狀態存在 JS 變數即可。
+5. 只輸出一個完整的 .html 檔內容，從 <!DOCTYPE html> 開始。
+
+請依【我的需求】設計題目與互動，並確保「操作成功時一定會呼叫上述 postMessage」。`;
+function copyMachinePrompt(){
+  navigator.clipboard.writeText(MACHINE_AI_PROMPT).then(
+    ()=>sysAlert('✅ AI 生成提示詞已複製！\\n貼到 ChatGPT / Claude / Gemini 等 AI，並在提示詞中補上你的「學科單元、介面需求、通關條件」，即可生成符合規範的機台 HTML。\\n生成後存成 .html 上傳即可。'),
+    ()=>{ const ta=document.createElement('textarea'); ta.value=MACHINE_AI_PROMPT;
+      ta.style.cssText='position:fixed;top:8%;left:4%;width:92%;height:70%;z-index:9999'; document.body.appendChild(ta); ta.select();
+      sysAlert('請手動複製反白的提示詞文字。'); });
+}
 function renderMachineList(){
   const box=document.getElementById('g-machine-list'); if(!box)return;
   ensureMachines();
@@ -2555,9 +2681,10 @@ function renderMachineList(){
     row.style.cssText='display:flex;align-items:center;gap:10px;background:#f0fff4;border:1px solid #b6e5c4;border-radius:8px;padding:6px 10px';
     const eff=m.kind==='teleport'?('傳送→'+((gameData.rooms[m.teleportTo]||{}).name||'?')):(MC_KIND_LABEL[m.kind]+' +'+m.amount);
     row.innerHTML=`<div style="font-size:1.4em">⚗️</div>
-      <div style="flex:1"><div style="font-weight:bold">${m.title}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:bold">${m.title}</div>
         <div style="font-size:.72em;color:#777">${m.topic?m.topic+' · ':''}效果：${eff} · 上限 ${m.max} · ${Math.round((m.html||'').length/1024)}KB</div></div>
-      <button class="tbtn" style="padding:5px 12px" onclick="openMachineModal('${m.id}')">編輯</button>`;
+      <button style="flex-shrink:0;padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85em" onclick="openMachineModal('${m.id}')">✏️ 編輯</button>
+      <button style="flex-shrink:0;padding:6px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85em" onclick="deleteMachineDirect('${m.id}')">🗑️ 刪除</button>`;
     box.appendChild(row);
   });
 }
@@ -2764,15 +2891,23 @@ function renderEnemyList(){
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:10px;background:#f7f9fc;border:1px solid #dde5ee;border-radius:8px;padding:6px 10px';
     const cvid='en-thumb-'+e.id;
-    row.innerHTML=`<canvas id="${cvid}" width="44" height="44" style="width:44px;height:44px;background:#1b2430;border-radius:6px"></canvas>
-      <div style="flex:1">
+    row.innerHTML=`<canvas id="${cvid}" width="44" height="44" style="width:44px;height:44px;background:#1b2430;border-radius:6px;flex-shrink:0"></canvas>
+      <div style="flex:1;min-width:0">
         <div style="font-weight:bold">${e.name} <span style="font-size:.75em;color:${e.attackType==='gun'?'#0369a1':'#9a3030'}">${e.attackType==='gun'?'🔫 槍械':'👊 近身'}</span></div>
-        <div style="font-size:.72em;color:#777">HP ${e.hp} · 攻擊 ${e.atk} · 速度 ${e.speed} · ${e.img?'自訂圖':'內建機器人'}</div>
+        <div style="font-size:.72em;color:#777">HP ${e.hp} · 攻擊 ${e.atk} · 速度 ${e.speed} · 大小 ${(e.scale||1)}× · ${e.img?'自訂圖':'內建機器人'}</div>
       </div>
-      <button class="tbtn" style="padding:5px 12px" onclick="openEnemyModal('${e.id}')">編輯</button>`;
+      <button style="flex-shrink:0;padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85em" onclick="openEnemyModal('${e.id}')">✏️ 編輯</button>
+      <button style="flex-shrink:0;padding:6px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.85em" onclick="deleteEnemyDirect('${e.id}')">🗑️ 刪除</button>`;
     box.appendChild(row);
-    // 縮圖
     setTimeout(()=>renderEnemyThumb(cvid, e),0);
+  });
+}
+function deleteEnemyDirect(id){
+  const e=(gameData.enemies||[]).find(x=>x.id===id); if(!e)return;
+  sysConfirm('確定刪除敵人「'+e.name+'」？各房間中此敵人的設定也會一併移除。',()=>{
+    gameData.enemies=(gameData.enemies||[]).filter(x=>x.id!==id);
+    Object.values(gameData.rooms||{}).forEach(r=>{ if(r.enemySpawns) r.enemySpawns=r.enemySpawns.filter(s=>s.typeId!==id); });
+    autoSave(); renderEnemyList();
   });
 }
 const _enemyThumbImgs={};
@@ -4361,6 +4496,8 @@ function buildGameHTML(isPreview){
   payload.isPreview=isPreview;
   payload.MACHINES=MACHINES;
   const tv=THEME_VARS[gameData.themeColor]||THEME_VARS.default;
+  // 安全序列化：避免自訂機台 HTML 內的結束 script 標籤或注釋破壞外層腳本
+  const safeJSON=(obj)=>JSON.stringify(obj).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
 
   const raw1=document.getElementById('raw-runtime').textContent;
   const raw2=document.getElementById('raw-runtime-2').textContent;
@@ -4525,10 +4662,10 @@ ${gameData.customTabEnabled&&gameData.customTabUrl?`<div id="ctab-btn" onclick="
   <button class="btn-act" onclick="restartGame()">🔄 重新開始</button></div></div>
 
 <script>
-window.__PAYLOAD__=${JSON.stringify(payload)};
-window.__PROPS__=${JSON.stringify(PROPS)};
-window.__PICKUPS__=${JSON.stringify(PICKUPS)};
-window.__PROP_SCALES__=${JSON.stringify(PROP_SCALES_RUNTIME)};
+window.__PAYLOAD__=${safeJSON(payload)};
+window.__PROPS__=${safeJSON(PROPS)};
+window.__PICKUPS__=${safeJSON(PICKUPS)};
+window.__PROP_SCALES__=${safeJSON(PROP_SCALES_RUNTIME)};
 function openBackpack(){ if(window.__openBackpack) window.__openBackpack(); }
 function openCustomTab(){ if(window.__openCustomTab) window.__openCustomTab(); }
 <\/script>
